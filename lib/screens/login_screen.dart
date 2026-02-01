@@ -134,7 +134,7 @@ class _LoginScreenState extends State<LoginScreen>
             await prefs.setString('jwt_token', token);
             debugPrint("LOGIN SCREEN: Token Saved!");
           } else {
-             debugPrint("LOGIN SCREEN: ERROR - Token is NULL in response!");
+             debugPrint("LOGIN SCREEN: ERROR - Token is NULL in Response!");
           }
           // You can also store user data here if needed (e.g. using SharedPreferences)
           // final user = data['user']; 
