@@ -1,4 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import '../../config.dart';
+import 'user_details.dart'; // Import for navigation
 
 // Simple Model to mirror your React User context
 class User {
@@ -7,7 +11,7 @@ class User {
   final String email;
   final String phone;
   final String membershipStatus; // 'paid' or 'unpaid'
-  final DateTime membershipExpiry;
+  // final DateTime membershipExpiry; // Logic for this would be complex from just created_at
 
   User({
     required this.id,
@@ -15,8 +19,19 @@ class User {
     required this.email,
     required this.phone,
     required this.membershipStatus,
-    required this.membershipExpiry,
+    // required this.membershipExpiry,
   });
+
+  factory User.fromJson(Map<String, dynamic> json) {
+    return User(
+      id: json['id'].toString(),
+      name: json['name'] ?? 'Unknown',
+      email: json['email'] ?? '',
+      phone: json['phone'] ?? '',
+      membershipStatus: json['membership_status'] ?? 'unpaid',
+      // membershipExpiry: DateTime.now(), // Placeholder
+    );
+  }
 }
 
 class ManageUsers extends StatefulWidget {
@@ -27,13 +42,35 @@ class ManageUsers extends StatefulWidget {
 }
 
 class _ManageUsersState extends State<ManageUsers> {
-  final List<User> _allUsers = [
-    User(id: '1', name: 'John Doe', email: 'john@example.com', phone: '123456789', membershipStatus: 'paid', membershipExpiry: DateTime.now().add(const Duration(days: 30))),
-    User(id: '2', name: 'Jane Smith', email: 'jane@example.com', phone: '987654321', membershipStatus: 'unpaid', membershipExpiry: DateTime.now()),
-  ];
-
+  List<User> _allUsers = [];
+  bool _isLoading = true;
   String _searchTerm = '';
   String _filterStatus = 'all';
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchUsers();
+  }
+
+  Future<void> _fetchUsers() async {
+    setState(() => _isLoading = true);
+    try {
+      final response = await http.get(Uri.parse('${Config.baseUrl}/get_users.php'));
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data['success']) {
+          setState(() {
+            _allUsers = (data['data'] as List).map((json) => User.fromJson(json)).toList();
+          });
+        }
+      }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error fetching users: $e")));
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
 
   // Filtering Logic
   List<User> get _filteredUsers {
@@ -50,17 +87,13 @@ class _ManageUsersState extends State<ManageUsers> {
     return Scaffold(
       backgroundColor: Colors.grey[50],
       appBar: AppBar(
-        // Yellow Theme applied here
         backgroundColor: Colors.amber,
         foregroundColor: Colors.black,
         elevation: 1,
         title: const Text('Manage Users', style: TextStyle(fontWeight: FontWeight.bold)),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
-          onPressed: () {
-            // HOW TO SET ONCLICK (Navigation)
-            Navigator.pop(context);
-          },
+          onPressed: () => Navigator.pop(context),
         ),
       ),
       body: Padding(
@@ -99,7 +132,9 @@ class _ManageUsersState extends State<ManageUsers> {
 
             // User Table (DataTable)
             Expanded(
-              child: Container(
+              child: _isLoading
+                  ? const Center(child: CircularProgressIndicator(color: Colors.amber))
+                  : Container(
                 width: double.infinity,
                 decoration: BoxDecoration(
                   color: Colors.white,
@@ -131,10 +166,13 @@ class _ManageUsersState extends State<ManageUsers> {
                           )),
                           DataCell(
                             TextButton(
-                              // HOW TO SET ONCLICK (Action Button)
                               onPressed: () {
-                                print("Navigating to user: ${user.id}");
-                                // Navigate to details page logic here
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => UserDetailScreen(userId: user.id),
+                                  ),
+                                );
                               },
                               child: const Text('View Details', style: TextStyle(color: Colors.blue)),
                             ),
@@ -146,6 +184,7 @@ class _ManageUsersState extends State<ManageUsers> {
                 ),
               ),
             ),
+
 
             Padding(
               padding: const EdgeInsets.only(top: 10),

@@ -144,7 +144,9 @@ class _LoginScreenState extends State<LoginScreen>
             final token = data['token'];
             debugPrint("LOGIN SCREEN: Saving Token: $token");
             await prefs.setString('jwt_token', token);
-            debugPrint("LOGIN SCREEN: Token Saved!");
+            await prefs.setString('user_id', data['user']['id'].toString());
+            await prefs.setString('user_name', data['user']['name']);
+            debugPrint("LOGIN SCREEN: Token & User Data Saved!");
           } else {
              debugPrint("LOGIN SCREEN: ERROR - Token is NULL in Response!");
           }

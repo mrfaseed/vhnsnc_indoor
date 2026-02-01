@@ -4,6 +4,9 @@ import 'payment_overview.dart';
 import 'create_announcement.dart';
 import 'user_details.dart';
 import '../create_account.dart';
+import 'manage_announcements.dart';
+import 'admin_create_user.dart';
+import 'admin_qr_scan.dart';
 
 class AdminDashboard extends StatefulWidget {
   const AdminDashboard({super.key});
@@ -120,15 +123,57 @@ class _AdminDashboardState extends State<AdminDashboard> {
                   },
                 ),
                 _buildActionCard(
-                  Icons.analytics,
-                  "User details",
+                  Icons.edit_note,
+                  "Manage Announcements",
                   onTap: () {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                          // Passing '1' as a placeholder ID as per the screen requirement
-                          builder: (context) =>
-                              const UserDetailScreen(userId: '1')),
+                          builder: (context) => const ManageAnnouncements()),
+                    );
+                  },
+                ),
+                _buildActionCard(
+                  Icons.search,
+                  "Search User",
+                  onTap: () {
+                    showDialog(
+                      context: context,
+                      builder: (context) {
+                        final TextEditingController _searchController = TextEditingController();
+                        return AlertDialog(
+                          title: const Text("Enter User ID"),
+                          content: TextField(
+                            controller: _searchController,
+                            keyboardType: TextInputType.number,
+                            decoration: const InputDecoration(
+                              hintText: "User ID (e.g. 15)",
+                              border: OutlineInputBorder(),
+                            ),
+                          ),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(context),
+                              child: const Text("Cancel"),
+                            ),
+                            ElevatedButton(
+                              onPressed: () {
+                                if (_searchController.text.isNotEmpty) {
+                                  Navigator.pop(context); // Close dialog
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) => UserDetailScreen(userId: _searchController.text),
+                                    ),
+                                  );
+                                }
+                              },
+                              style: ElevatedButton.styleFrom(backgroundColor: _primaryYellow, foregroundColor: Colors.black),
+                              child: const Text("Search"),
+                            ),
+                          ],
+                        );
+                      }
                     );
                   },
                 ),
@@ -139,7 +184,18 @@ class _AdminDashboardState extends State<AdminDashboard> {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                          builder: (context) => const RegisterScreen()),
+                          builder: (context) => const AdminCreateUser()),
+                    );
+                  },
+                ),
+                _buildActionCard(
+                  Icons.qr_code_scanner,
+                  "Scan QR",
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                          builder: (context) => const AdminQRScanScreen()),
                     );
                   },
                 ),

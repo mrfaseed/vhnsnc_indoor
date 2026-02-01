@@ -28,7 +28,14 @@ class _CreateAnnouncementState extends State<CreateAnnouncement> {
   Future<void> _handleSubmit() async {
     if (_titleController.text.isEmpty || _descController.text.isEmpty) return;
 
-    setState(() => _isSaving = true);
+    // Show Loading Dialog
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(
+        child: CircularProgressIndicator(color: Colors.amber),
+      ),
+    );
 
     try {
       final url = Uri.parse('${Config.baseUrl}/create_announcement.php');
@@ -43,25 +50,41 @@ class _CreateAnnouncementState extends State<CreateAnnouncement> {
 
       final data = jsonDecode(response.body);
 
-      setState(() => _isSaving = false);
+      // Close Loading Dialog
+      if (mounted) Navigator.pop(context);
 
       if (data['success'] == true) {
-         setState(() => _showSuccess = true);
-
-        // Auto-navigate after 2 seconds
-        Future.delayed(const Duration(seconds: 2), () {
-          if (mounted) Navigator.pop(context);
-        });
+        if (mounted) {
+           ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text("Announcement created successfully!"),
+              backgroundColor: Colors.green,
+            ),
+          );
+          Navigator.pop(context); // Go back
+        }
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Error: ${data['message']}")),
-        );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text("Error: ${data['message']}"),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
       }
     } catch (e) {
-      setState(() => _isSaving = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Connection failed: $e")),
-      );
+      // Close Loading Dialog if open
+      if (mounted) Navigator.pop(context);
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("Connection failed: $e"),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 
