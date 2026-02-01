@@ -79,7 +79,7 @@ class UserDashboard extends StatelessWidget {
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('Welcome back,', style: LightTheme.subTextWhite),
+                          Text('Welcome Back,', style: LightTheme.subTextWhite),
                           const SizedBox(height: 4),
                           Text(user['name'], style: LightTheme.headingWhite),
                         ],

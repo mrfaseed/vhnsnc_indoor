@@ -92,7 +92,7 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
     // await Future.delayed(const Duration(seconds: 2)); // Removed delay
 
     try {
-      final url = Uri.parse('${Config.baseUrl}/signup.php');
+      final url = Uri.parse('${Config.baseUrl}  ');
 
       final response = await http.post(
         url,

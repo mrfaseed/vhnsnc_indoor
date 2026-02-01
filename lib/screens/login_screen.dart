@@ -1,15 +1,18 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
-import '../config.dart';
+import '../config.dart' as app_config;
 
+
+import 'package:google_fonts/google_fonts.dart';
 
 import 'admin_login.dart';
 import 'forget_password_screen.dart';
 import 'user/user_dashboard.dart';
+import '../widgets/aurora_background.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -35,9 +38,18 @@ class _LoginScreenState extends State<LoginScreen>
 
   // Yellow theme colors - professional palette
   static const Color _primaryYellow = Color(0xFFFFC107); // Amber
+  static const Color _forgetpassYellow = Color(0xFF251A0D); // Amber darken-1
   static const Color _darkYellow = Color(0xFFFF8F00); // Amber darken-2
   static const Color _lightYellow = Color(0xFFFFECB3); // Amber lighten-4
-  static const Color _background = Color(0xFFF8F9FA); // Light gray background
+  static const LinearGradient _background = LinearGradient(
+    colors: [
+      Color(0xFFFFFFFF), // Gold
+      Color(0xFFF8C550), // Amber
+    ],
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+  );
+
   static const Color _surface = Color(0xFFFFFFFF); // White surface
   static const Color _textPrimary = Color(0xFF212121); // Dark gray
   static const Color _textSecondary = Color(0xFF757575); // Medium gray
@@ -95,7 +107,7 @@ class _LoginScreenState extends State<LoginScreen>
     });
 
     try {
-      final url = Uri.parse('${Config.baseUrl}/login.php');
+      final url = Uri.parse('${app_config.Config.baseUrl}/login.php');
 
       final startTime = DateTime.now();
 
@@ -162,14 +174,21 @@ class _LoginScreenState extends State<LoginScreen>
   }
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: _background,
-      body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            physics: const BouncingScrollPhysics(),
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
-            child: FadeTransition(
+    return Theme(
+      data: Theme.of(context).copyWith(
+        textTheme: GoogleFonts.outfitTextTheme(
+          Theme.of(context).textTheme,
+        ),
+      ),
+      child: Scaffold(
+      body: AuroraBackground(
+        colors: _background.colors,
+        child: SafeArea(
+          child: Center(
+            child: SingleChildScrollView(
+              physics: const BouncingScrollPhysics(),
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+              child: FadeTransition(
               opacity: _fadeAnimation,
               child: SlideTransition(
                 position: _slideAnimation,
@@ -344,7 +363,7 @@ class _LoginScreenState extends State<LoginScreen>
                                   child: Text(
                                     "Forgot Password?",
                                     style: TextStyle(
-                                      color: _primaryYellow,
+                                      color: _forgetpassYellow,
                                       fontWeight: FontWeight.w600,
                                       fontSize: 14,
                                     ),
@@ -514,6 +533,10 @@ class _LoginScreenState extends State<LoginScreen>
           ),
         ),
       ),
+      ),
+      ),
     );
   }
 }
+
+

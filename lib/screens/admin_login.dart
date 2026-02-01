@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
 import './admin/admin_dashboard.dart';
+import 'package:google_fonts/google_fonts.dart';
+import '../widgets/aurora_background.dart';
+
 class AdminLoginScreen extends StatefulWidget {
   const AdminLoginScreen({super.key});
 
@@ -29,13 +32,22 @@ class _AdminLoginScreenState extends State<AdminLoginScreen>
   static const Color _darkYellow = Color(0xFFFF8F00); // Amber darken-2
   static const Color _lightYellow = Color(0xFFFFECB3); // Amber lighten-4
   static const Color _accentYellow = Color(0xFFFFD54F); // Amber lighten-2
-  static const Color _background = Color(0xFFF8F9FA); // Light gray background
   static const Color _surface = Color(0xFFFFFFFF); // White surface
   static const Color _textPrimary = Color(0xFF212121); // Dark gray
   static const Color _textSecondary = Color(0xFF757575); // Medium gray
   static const Color _borderColor = Color(0xFFE0E0E0); // Light border
   static const Color _errorColor = Color(0xFFD32F2F); // Red for errors
   static const Color _adminAccent = Color(0xFF795548); // Brown accent for admin
+
+    static const LinearGradient _background = LinearGradient(
+    colors: [
+      Color(0xFFFFFFFF), // Gold
+      Color(0xFFF8C550), // Amber
+    ],
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+  );
+
 
   @override
   void initState() {
@@ -123,9 +135,16 @@ class _AdminLoginScreenState extends State<AdminLoginScreen>
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: _background,
-      body: LayoutBuilder(
+    return Theme(
+      data: Theme.of(context).copyWith(
+        textTheme: GoogleFonts.outfitTextTheme(
+          Theme.of(context).textTheme,
+        ),
+      ),
+      child: Scaffold(
+      body: AuroraBackground(
+        colors: _background.colors,
+        child: LayoutBuilder(
         builder: (context, constraints) {
           // Check if screen is wide enough for split view (Tablet/Desktop)
           bool isWideScreen = constraints.maxWidth > 800;
@@ -407,7 +426,7 @@ class _AdminLoginScreenState extends State<AdminLoginScreen>
                                             color: _adminAccent,
                                           ),
                                           filled: true,
-                                          fillColor: _background,
+                                          fillColor: _surface,
                                           border: OutlineInputBorder(
                                             borderRadius: BorderRadius.circular(12),
                                             borderSide: BorderSide(color: _borderColor),
@@ -479,7 +498,7 @@ class _AdminLoginScreenState extends State<AdminLoginScreen>
                                             ),
                                           ),
                                           filled: true,
-                                          fillColor: _background,
+                                          fillColor: _surface,
                                           border: OutlineInputBorder(
                                             borderRadius: BorderRadius.circular(12),
                                             borderSide: BorderSide(color: _borderColor),
@@ -632,6 +651,8 @@ class _AdminLoginScreenState extends State<AdminLoginScreen>
             ],
           );
         },
+      ),
+      ),
       ),
     );
   }
