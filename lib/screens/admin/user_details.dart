@@ -125,10 +125,37 @@ class _UserDetailScreenState extends State<UserDetailScreen> {
     }
   }
 
-  // Handle status update (Dummy implementation for now, connects to backend later if needed)
-  void _handleStatusUpdate(String status) {
-    // In a real app, you would call an API update_user_status.php here
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Marked as $status (UI only)")));
+  // Handle status update
+  Future<void> _handleStatusUpdate(String status) async {
+    setState(() => _isLoading = true);
+    
+    try {
+      final response = await http.post(
+        Uri.parse('${Config.baseUrl}/update_user_status.php'),
+        body: {
+          'user_id': widget.userId,
+          'status': status,
+        },
+      );
+      
+      final data = json.decode(response.body);
+      
+      if (data['success'] == true) {
+        if (mounted) {
+           ScaffoldMessenger.of(context).showSnackBar(
+             SnackBar(content: Text("User marked as $status!")),
+           );
+           _fetchData(); // Refresh data to show new status/expiry
+        }
+      } else {
+        _setError(data['message'] ?? "Update failed");
+      }
+    } catch (e) {
+      _setError("Network error: $e");
+    } finally {
+      // _isLoading is handled by _fetchData inside success, but if error/loading needs reset:
+     if (mounted && user == null) setState(() => _isLoading = false); 
+    }
   }
 
   @override

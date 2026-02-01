@@ -108,7 +108,33 @@ class _UserDashboardState extends State<UserDashboard> {
     // Expiring Soon Logic
     final bool expiringSoon = isPaid && _daysRemaining <= 30 && _daysRemaining >= 0;
 
-    return Scaffold(
+    return PopScope(
+      canPop: false,
+      onPopInvoked: (bool didPop) async {
+        if (didPop) return;
+        final shouldPop = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text("Logout"),
+            content: const Text("Are you sure you want to logout?"),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text("Cancel"),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(context, true),
+                style: TextButton.styleFrom(foregroundColor: Colors.red),
+                child: const Text("Logout"),
+              ),
+            ],
+          ),
+        );
+        if (shouldPop ?? false) {
+           if (context.mounted) Navigator.pop(context);
+        }
+      },
+      child: Scaffold(
       backgroundColor: LightTheme.background,
       body: _isLoading 
         ? const Center(child: CircularProgressIndicator(color: Colors.amber))
@@ -147,13 +173,48 @@ class _UserDashboardState extends State<UserDashboard> {
                           Text(_userName, style: LightTheme.headingWhite),
                         ],
                       ),
-                      IconButton(
-                        onPressed: () => _navigateToScreen(context, const SettingsScreen()),
-                        icon: const Icon(Icons.settings_outlined),
-                        color: Colors.white,
-                        style: IconButton.styleFrom(
-                          backgroundColor: Colors.white24,
-                        ),
+                      Row(
+                        children: [
+                          IconButton(
+                            onPressed: () => _navigateToScreen(context, const SettingsScreen()),
+                            icon: const Icon(Icons.settings_outlined),
+                            color: Colors.white,
+                            style: IconButton.styleFrom(
+                              backgroundColor: Colors.white24,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          IconButton(
+                            onPressed: () {
+                              showDialog(
+                                context: context,
+                                builder: (context) => AlertDialog(
+                                  title: const Text("Logout"),
+                                  content: const Text("Are you sure you want to logout?"),
+                                  actions: [
+                                    TextButton(
+                                      onPressed: () => Navigator.pop(context),
+                                      child: const Text("Cancel"),
+                                    ),
+                                    TextButton(
+                                      onPressed: () {
+                                        Navigator.pop(context); // Close dialog
+                                        Navigator.pop(context); // Exit screen
+                                      },
+                                      style: TextButton.styleFrom(foregroundColor: Colors.red),
+                                      child: const Text("Logout"),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            },
+                            icon: const Icon(Icons.logout),
+                            color: Colors.white,
+                            style: IconButton.styleFrom(
+                              backgroundColor: Colors.white24,
+                            ),
+                          ),
+                        ],
                       )
                     ],
                   ),
@@ -348,6 +409,7 @@ class _UserDashboardState extends State<UserDashboard> {
             const SizedBox(height: 40),
           ],
         ),
+      ),
       ),
     );
   }

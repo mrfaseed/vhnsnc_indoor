@@ -98,7 +98,7 @@ class _MakePaymentScreenState extends State<MakePaymentScreen> {
         color: Colors.white,
         border: Border(bottom: BorderSide(color: Colors.grey.shade200)),
         boxShadow: [
-          BoxShadow(color: Colors.black.withValues(alpha : 0.05), blurRadius: 4, offset: const Offset(0, 2))
+          BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 4, offset: const Offset(0, 2))
         ],
       ),
       child: Row(
@@ -235,7 +235,7 @@ class _MakePaymentScreenState extends State<MakePaymentScreen> {
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: Colors.yellow.shade200, width: 2),
         boxShadow: [
-          BoxShadow(color: Colors.black.withValues(alpha : 0.05), blurRadius: 10, offset: const Offset(0, 4)),
+          BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4)),
         ],
       ),
       child: child,
