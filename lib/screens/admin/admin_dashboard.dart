@@ -7,6 +7,7 @@ import '../create_account.dart';
 import 'manage_announcements.dart';
 import 'admin_create_user.dart';
 import 'admin_qr_scan.dart';
+import 'user_search_delegate.dart';
 
 class AdminDashboard extends StatefulWidget {
   const AdminDashboard({super.key});
@@ -137,43 +138,9 @@ class _AdminDashboardState extends State<AdminDashboard> {
                   Icons.search,
                   "Search User",
                   onTap: () {
-                    showDialog(
+                    showSearch(
                       context: context,
-                      builder: (context) {
-                        final TextEditingController _searchController = TextEditingController();
-                        return AlertDialog(
-                          title: const Text("Enter User ID"),
-                          content: TextField(
-                            controller: _searchController,
-                            keyboardType: TextInputType.number,
-                            decoration: const InputDecoration(
-                              hintText: "User ID (e.g. 15)",
-                              border: OutlineInputBorder(),
-                            ),
-                          ),
-                          actions: [
-                            TextButton(
-                              onPressed: () => Navigator.pop(context),
-                              child: const Text("Cancel"),
-                            ),
-                            ElevatedButton(
-                              onPressed: () {
-                                if (_searchController.text.isNotEmpty) {
-                                  Navigator.pop(context); // Close dialog
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (context) => UserDetailScreen(userId: _searchController.text),
-                                    ),
-                                  );
-                                }
-                              },
-                              style: ElevatedButton.styleFrom(backgroundColor: _primaryYellow, foregroundColor: Colors.black),
-                              child: const Text("Search"),
-                            ),
-                          ],
-                        );
-                      }
+                      delegate: UserSearchDelegate(),
                     );
                   },
                 ),
