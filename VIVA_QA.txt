@@ -1,0 +1,145 @@
+
+================================================================================
+                                FINAL YEAR PROJECT - VIVA Q/A
+================================================================================
+
+This document contains potential Viva questions and answers for the key modules of the Indoor Stadium Management System project.
+
+--------------------------------------------------------------------------------
+MODULE 1: USER LOGIN
+--------------------------------------------------------------------------------
+
+Q1: How does the User Login authentication flow work in your app?
+A1: 
+   - The user enters their credentials (email/username and password).
+   - The Flutter app sends a POST request using the `http` package to the backend API endpoint (`login.php`).
+   - The PHP script checks the database for a matching record.
+   - If valid, the server returns a JSON response containing a success status and a JWT (or unique token) along with user details.
+   - We separate UI state (loading, error messages) from the logic to ensure a smooth user experience.
+
+Q2: How do you maintain the user's session after they log in?
+A2: 
+   - Upon successful login, we store the receiving `user_id`, `user_name`, and authentication token locally on the device.
+   - We use the `shared_preferences` package for this persistence.
+   - This allows the app to check if a user is already logged in when it restarts and skip the login screen.
+
+Q3: How do you handle network errors or server timeouts during login?
+A3: 
+   - We wrap our HTTP requests in a `try-catch` block.
+   - We specifically set a timeout duration (e.g., 10 seconds).
+   - If an exception occurs (like `SocketException` or `TimeoutException`), we catch it and update the UI state to show a friendly error message to the user ("Connection timed out", "Server Error", etc.).
+
+Q4: Why did you choose a Column layout for the login form?
+A4: 
+   - A `Column` widget allows us to stack the logo, title, form fields, and buttons vertically.
+   - We wrapped it in a `SingleChildScrollView` to prevent "overflow" errors when the keyboard pops up on smaller screens.
+
+--------------------------------------------------------------------------------
+MODULE 2: ADMIN LOGIN
+--------------------------------------------------------------------------------
+
+Q1: How does the Admin Login differ from the User Login implementation?
+A1: 
+   - While the underlying mechanism (POST request) is similar, the validation logic is stricter.
+   - The Admin Login often checks against a specific `admins` table or a user role flag (e.g., `role: 'admin'`) in the database.
+   - In this specific implementation, we also included a hardcoded check or separate endpoint to ensure only authorized personnel can access the dashboard.
+
+Q2: Your Admin Login screen looks different on Desktop/Web. How did you achieve that?
+A2: 
+   - We used the `LayoutBuilder` widget.
+   - It provides the parent widget's constraints. We check `constraints.maxWidth`.
+   - If the width > 800 pixels (Desktop/Tablet), we show a split-screen view with a branding panel on the left and the login form on the right.
+   - On smaller screens (Mobile), it reverts to a single-column layout.
+
+Q3: What security measures did you consider for the Admin module?
+A3: 
+   - We prioritize secure password handling (hashing passwords in the backend, not storing plain text).
+   - In the frontend, we use `obscureText: true` for password fields.
+   - We implemented session management to ensure that if an admin logs out, their local token is cleared, preventing unauthorized access.
+
+--------------------------------------------------------------------------------
+MODULE 3: USER DASHBOARD
+--------------------------------------------------------------------------------
+
+Q1: How is the User Dashboard data populated?
+A1: 
+   - In the `initState()` method, we first retrieve the stored `user_id` from `SharedPreferences`.
+   - We then make an asynchronous GET request to `get_user_details.php` passing the `user_id`.
+   - The JSON response is parsed to update the UI variables (Membership Status, Expiry Date, etc.) using `setState()`.
+
+Q2: What is the purpose of the "PopScope" widget used in the Dashboard?
+A2: 
+   - Validating the "Back" button behavior is crucial for the dashboard. We don't want users to accidentally exit the app.
+   - `PopScope` (or `WillPopScope` in older Flutter versions) intercepts the back button press.
+   - We use it to show a confirmation dialog ("Are you sure you want to logout?") before actually popping the route.
+
+Q3: How do you handle the "Membership Status" logic (Paid/Expired/Inactive)?
+A3: 
+   - We receive the status string from the backend.
+   - In the `build` method, we have conditional logic (e.g., `isPaid`, `isExpired`).
+   - Based on these booleans, we change the color of the status card (Green for Active, Red for Inactive/Expired) and the icon displayed.
+
+Q4: Explain the `GridView` implementation for the "Quick Actions" section.
+A4: 
+   - We used `GridView.count` with a `crossAxisCount` of 2.
+   - This creates a 2-column grid layout for buttons like "Membership Card", "Make Payment", etc.
+   - We set `shrinkWrap: true` and `physics: NeverScrollableScrollPhysics()` so it scrolls together with the rest of the page (inside the parent `SingleChildScrollView`), rather than having its own internal scrollbar.
+
+--------------------------------------------------------------------------------
+MODULE 4: ADMIN DASHBOARD
+--------------------------------------------------------------------------------
+
+Q1: How does the Admin Dashboard fetch "Recent Payments"?
+A1: 
+   - Similar to the user dashboard, we call `_fetchRecentPayments()` on init.
+   - It hits the `get_all_payments.php` endpoint.
+   - The data is parsed into a list of `Payment` objects.
+   - We use `.take(5)` to only display the 5 most recent transactions on the main dashboard, keeping the UI clean.
+
+Q2: How do you structure the admin's navigation to different management tools?
+A2: 
+   - We use a grid of "Action Cards" (widgets) for navigating to "Manage Users", "Transactions", "Create Announcement", etc.
+   - Each card is wrapped in an `InkWell` for the ripple effect on tap.
+   - Tapping a card pushes the respective route (e.g., `Navigator.push(context, MaterialPageRoute(...))`) onto the stack.
+
+Q3: What architectural pattern did you use for the Dashboard widgets?
+A3: 
+   - We used a "Component-based" approach.
+   - Instead of writing all code in one giant build method, we extracted helper methods like `_buildStatCard` and `_buildActionCard`.
+   - This makes the code more readable, maintainable, and reusable.
+
+Q4: How would you scale this dashboard if you had 10,000 users?
+A4: 
+   - Currently, we fetch all data at once. For scale, we would implement "Pagination" on the backend APIs.
+   - The dashboard would only fetch summary statistics (count query) and the first page of recent records to keep the payload light and the app fast.
+
+--------------------------------------------------------------------------------
+TECHNICAL / GENERAL PROJECT QUESTIONS
+--------------------------------------------------------------------------------
+
+Q1: Why did you choose Flutter for this project?
+A1: 
+   - Cross-platform capability (iOS & Android from one codebase).
+   - Hot Reload feature speeds up development.
+   - Rich set of pre-built widgets (Materials Design) which helps in creating a professional-looking UI quickly.
+
+Q2: How does the app communicate with the MySQL database?
+A2: 
+   - The Flutter app does NOT talk to MySQL directly (for security reasons).
+   - It communicates via a REST API layer written in PHP.
+   - Flutter sends HTTP requests -> PHP Script (Server) -> MySQL Database.
+   - The PHP script processes the result and sends it back as JSON.
+
+Q3: What is "pubspec.yaml" and what packages did you use?
+A3: 
+   - It is the configuration file for dependency management in Flutter.
+   - Key packages used:
+     - `http`: For API calls.
+     - `shared_preferences`: For local storage (session).
+     - `google_fonts`: For custom typography.
+     - `intl`: For date formatting (if used).
+
+Q4: What is the "State" in `StatefulWidget`?
+A4: 
+   - State is information that can be read synchronously when the widget is built and might change during the lifetime of the widget.
+   - When we call `setState()`, it triggers a rebuild of the widget to reflect the new data (e.g., showing a loading spinner, then showing the user data).

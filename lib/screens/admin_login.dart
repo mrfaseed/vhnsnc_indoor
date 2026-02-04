@@ -1,8 +1,13 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
 import './admin/admin_dashboard.dart';
-import 'package:google_fonts/google_fonts.dart';
+
 import '../widgets/aurora_background.dart';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
+import '../config.dart';
+import 'login_screen.dart';
 
 class AdminLoginScreen extends StatefulWidget {
   const AdminLoginScreen({super.key});
@@ -102,46 +107,69 @@ class _AdminLoginScreenState extends State<AdminLoginScreen>
       _isLoading = true;
     });
 
-    await Future.delayed(const Duration(seconds: 2));
-
-    if (!mounted) return;
-
-    // Mock Admin Logic (admin@club.com)
-    if (_emailController.text == 'admin@gmail.com' &&
-        _passwordController.text == 'admin123') {
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text("Welcome, ${_emailController.text}"),
-          backgroundColor: _darkYellow,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-        ),
+    try {
+      final response = await http.post(
+        Uri.parse("${Config.baseUrl}/admin_login.php"),
+        body: {
+          'email': _emailController.text.trim(),
+          'password': _passwordController.text.trim(),
+        },
       );
 
-      // Use pushReplacement with MaterialPageRoute
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => const AdminDashboard()),
-      );
-    } else {
-      setState(() => _errorMessage = 'Invalid admin credentials');
-    }
+      // Add a small delay for smoother UX (optional, but good for feedback)
+      // await Future.delayed(const Duration(milliseconds: 500)); 
 
-    if (mounted && _errorMessage != null) {
-      setState(() => _isLoading = false);
+      if (!mounted) return;
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+
+        if (data['success'] == true) {
+          // Save admin session
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setString('token', data['token'] ?? '');
+          await prefs.setString('user_role', 'admin');
+          
+          if (data['user'] != null) {
+            await prefs.setString('user_id', data['user']['id'].toString());
+            await prefs.setString('user_name', data['user']['name'] ?? 'Admin');
+            await prefs.setString('user_email', data['user']['email'] ?? _emailController.text);
+          }
+
+          if (!mounted) return;
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(data['message'] ?? "Welcome, ${_emailController.text}"),
+              backgroundColor: _darkYellow,
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+          );
+
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (context) => const AdminDashboard()),
+          );
+        } else {
+          setState(() => _errorMessage = data['message'] ?? 'Invalid admin credentials');
+        }
+      } else {
+        setState(() => _errorMessage = 'Server error: ${response.statusCode}');
+      }
+    } catch (e) {
+      setState(() => _errorMessage = 'Network error. Please check your connection.');
+      debugPrint('Admin Login Error: $e');
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Theme(
-      data: Theme.of(context).copyWith(
-        textTheme: GoogleFonts.outfitTextTheme(
-          Theme.of(context).textTheme,
-        ),
-      ),
-      child: Scaffold(
+    return Scaffold(
       body: AuroraBackground(
         colors: _background.colors,
         child: LayoutBuilder(
@@ -418,7 +446,7 @@ class _AdminLoginScreenState extends State<AdminLoginScreen>
                                         textInputAction: TextInputAction.next,
                                         style: TextStyle(color: _textPrimary),
                                         decoration: InputDecoration(
-                                          hintText: "admin@club.com",
+                                          hintText: "Enter admin email ",
                                           hintStyle: TextStyle(
                                               color: _textSecondary.withOpacity(0.6)),
                                           prefixIcon: Icon(
@@ -614,7 +642,16 @@ class _AdminLoginScreenState extends State<AdminLoginScreen>
                                   height: 56,
                                   child: OutlinedButton.icon(
                                     onPressed: () {
-                                      Navigator.pop(context);
+                                      if (Navigator.canPop(context)) {
+                                        Navigator.pop(context);
+                                      } else {
+                                        Navigator.pushReplacement(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (_) => const LoginScreen(),
+                                          ),
+                                        );
+                                      }
                                     },
                                     style: OutlinedButton.styleFrom(
                                       foregroundColor: _textSecondary,
@@ -652,8 +689,7 @@ class _AdminLoginScreenState extends State<AdminLoginScreen>
           );
         },
       ),
-      ),
-      ),
-    );
+    ),
+  );
   }
 }

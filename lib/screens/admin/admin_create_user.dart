@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'dart:async';
+
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import '../../config.dart' as app_config;
@@ -17,7 +18,13 @@ class _AdminCreateUserState extends State<AdminCreateUser> {
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
   final _phoneController = TextEditingController();
-  final _passwordController = TextEditingController(); // Added password field as requested
+  final _otpController = TextEditingController(); // Replaced password field with OTP
+  
+  // OTP Logic
+  final List<bool> _otpVisible = [false, false, false, false];
+  final List<Timer?> _otpTimers = [null, null, null, null];
+  final FocusNode _otpFocusNode = FocusNode();
+  int _lastOtpLength = 0;
   
   String _membershipStatus = 'unpaid';
   int _durationMonths = 1;
@@ -40,7 +47,7 @@ class _AdminCreateUserState extends State<AdminCreateUser> {
           "name": _nameController.text,
           "email": _emailController.text,
           "phone": _phoneController.text,
-          "password": _passwordController.text,
+          "password": _otpController.text, // Sending OTP as password
           "membership_status": _membershipStatus,
           "duration_months": _membershipStatus == 'paid' ? _durationMonths : 0,
         }),
@@ -71,6 +78,21 @@ class _AdminCreateUserState extends State<AdminCreateUser> {
     }
   }
 
+
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _emailController.dispose();
+    _phoneController.dispose();
+    _otpController.dispose();
+    _otpFocusNode.dispose();
+    for (var timer in _otpTimers) {
+      timer?.cancel();
+    }
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -90,7 +112,7 @@ class _AdminCreateUserState extends State<AdminCreateUser> {
                     ),
                     Text(
                       "Create New User",
-                      style: GoogleFonts.outfit(fontSize: 22, fontWeight: FontWeight.bold, color: _textPrimary),
+                      style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: _textPrimary),
                     ),
                   ],
                 ),
@@ -119,7 +141,116 @@ class _AdminCreateUserState extends State<AdminCreateUser> {
                           const SizedBox(height: 16),
                           _buildTextField("Mobile Number", Icons.phone_outlined, _phoneController, type: TextInputType.phone),
                           const SizedBox(height: 16),
-                          _buildTextField("Password", Icons.lock_outline, _passwordController, type: TextInputType.visiblePassword, isPassword: true),
+
+                          const SizedBox(height: 16),
+                          
+                          // OTP Field (Replaces Password)
+                          Text("Create 4-Digit PIN", style: TextStyle(color: Colors.grey[600], fontSize: 16)),
+                          const SizedBox(height: 8),
+                          Stack(
+                            alignment: Alignment.center,
+                            children: [
+                              // Hidden TextField for input capture
+                              Opacity(
+                                opacity: 0,
+                                child: TextFormField(
+                                  controller: _otpController,
+                                  focusNode: _otpFocusNode,
+                                  keyboardType: TextInputType.number,
+                                  maxLength: 4,
+                                  onChanged: (value) {
+                                    setState(() {
+                                      if (value.length > _lastOtpLength) {
+                                        // Character added
+                                        int index = value.length - 1;
+                                        if (index < 4) {
+                                          _otpVisible[index] = true;
+                                          _otpTimers[index]?.cancel();
+                                          _otpTimers[index] = Timer(const Duration(seconds: 2), () {
+                                            if (mounted) {
+                                              setState(() {
+                                                _otpVisible[index] = false;
+                                              });
+                                            }
+                                          });
+                                        }
+                                      }
+                                      _lastOtpLength = value.length;
+                                    });
+                                  },
+                                  validator: (value) {
+                                    if (value == null || value.isEmpty) {
+                                      return 'Please create a PIN';
+                                    }
+                                    if (value.length != 4) {
+                                      return 'PIN must be exactly 4 digits';
+                                    }
+                                    return null;
+                                  },
+                                ),
+                              ),
+                              // Visible OTP Boxes
+                              GestureDetector(
+                                onTap: () {
+                                  FocusScope.of(context).requestFocus(_otpFocusNode);
+                                },
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: List.generate(4, (index) {
+                                    String char = "";
+                                    if (index < _otpController.text.length) {
+                                      char = _otpController.text[index];
+                                    }
+                                    
+                                    bool hasChar = char.isNotEmpty;
+                                    bool isVisible = _otpVisible[index];
+                                    bool isFocused = _otpFocusNode.hasFocus && index == _otpController.text.length;
+                                    
+                                    return AnimatedContainer(
+                                      duration: const Duration(milliseconds: 200),
+                                      curve: Curves.easeInOut,
+                                      width: 68,
+                                      height: 72,
+                                      alignment: Alignment.center,
+                                      decoration: BoxDecoration(
+                                        color: Colors.white, // Strictly white
+                                        borderRadius: BorderRadius.circular(16),
+                                        border: Border.all(
+                                          color: isFocused 
+                                              ? _primaryGold 
+                                              : (hasChar ? _primaryGold.withOpacity(0.5) : Colors.grey.shade300),
+                                          width: isFocused ? 2.5 : 1.5,
+                                        ),
+                                        boxShadow: [
+                                          if (isFocused)
+                                            BoxShadow(
+                                              color: _primaryGold.withOpacity(0.25),
+                                              blurRadius: 16,
+                                              spreadRadius: 2,
+                                              offset: const Offset(0, 4),
+                                            )
+                                          else 
+                                            BoxShadow(
+                                              color: Colors.black.withOpacity(0.05),
+                                              blurRadius: 10,
+                                              offset: const Offset(0, 2),
+                                            ),
+                                        ],
+                                      ),
+                                      child: Text(
+                                        char.isEmpty ? "" : (isVisible ? char : "●"), // iPhone style dot
+                                        style: TextStyle(
+                                          fontSize: isVisible ? 28 : (char.isEmpty ? 28 : 24),
+                                          fontWeight: FontWeight.w700,
+                                          color: _textPrimary,
+                                        ),
+                                      ),
+                                    );
+                                  }),
+                                ),
+                              ),
+                            ],
+                          ),
                           
                           const SizedBox(height: 32),
                           _buildSectionTitle("Membership"),

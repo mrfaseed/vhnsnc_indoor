@@ -20,13 +20,10 @@ $result = $stmt->get_result();
 
 if ($result->num_rows > 0) {
     $user = $result->fetch_assoc();
-    // Verify password (assuming password_hash was used for storage)
-    // If you are using plain text passwords (NOT RECOMMENDED), use: if ($password === $user['password'])
-    // For now, I'll use password_verify assuming a proper setup, but I'll comment out a plaintext fallback just in case the user manually inserted data without hashing.
     
-// ... (User verification logic)
-
-    if (password_verify($password, $user['password']) || $password === $user['password']) {
+    // Verify Password (which is the OTP/PIN)
+    // Using direct comparison for the PIN as requested
+    if ($password === $user['password']) {
         // Generate JWT Token
         $secret_key = "vhnsnc_indoor_secret_key"; // Change this to a secure random string
         $issued_at = time();
@@ -61,7 +58,7 @@ if ($result->num_rows > 0) {
             )
         ));
     } else {
-        echo json_encode(array("success" => false, "message" => "Invalid password"));
+        echo json_encode(array("success" => false, "message" => "Invalid PIN"));
     }
 } else {
     echo json_encode(array("success" => false, "message" => "User not found"));

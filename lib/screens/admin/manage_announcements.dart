@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../../config.dart' as app_config;
@@ -116,7 +116,7 @@ class _ManageAnnouncementsState extends State<ManageAnnouncements> {
               children: [
                 Text(
                   "Edit Announcement",
-                  style: GoogleFonts.outfit(fontSize: 24, fontWeight: FontWeight.bold, color: _textPrimary),
+                  style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: _textPrimary),
                 ),
                 IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close)),
               ],
@@ -235,11 +235,7 @@ class _ManageAnnouncementsState extends State<ManageAnnouncements> {
 
   @override
   Widget build(BuildContext context) {
-    return Theme(
-      data: Theme.of(context).copyWith(
-        textTheme: GoogleFonts.outfitTextTheme(Theme.of(context).textTheme),
-      ),
-      child: Scaffold(
+    return Scaffold(
         body: AuroraBackground(
           colors: _backgroundGradient.colors,
           child: SafeArea(
@@ -264,7 +260,7 @@ class _ManageAnnouncementsState extends State<ManageAnnouncements> {
                       const SizedBox(width: 16),
                       Text(
                         "Manage Announcements",
-                        style: GoogleFonts.outfit(fontSize: 22, fontWeight: FontWeight.bold, color: _textPrimary),
+                        style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: _textPrimary),
                       ),
                     ],
                   ),
@@ -359,7 +355,6 @@ class _ManageAnnouncementsState extends State<ManageAnnouncements> {
               ],
             ),
           ),
-        ),
       ),
     );
   }

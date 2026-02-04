@@ -12,10 +12,8 @@ CREATE TABLE IF NOT EXISTS users (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Test user with plaintext password "123456" (Login script supports fallback for testing)
--- In production, you should use password_hash() in PHP and store the hash.
--- In production, you should use password_hash() in PHP and store the hash.
-INSERT INTO users (name, email, phone, password) VALUES ('Test User', 'user@gmail.com', '0000000000', '123456');
+-- Test user with OTP "1234" (stored in password column)
+INSERT INTO users (name, email, phone, password) VALUES ('Test User', 'user@gmail.com', '0000000000', '1234');
 
 -- UPDATE INSTRUCTIONS (Jan 6, 2026):
 -- To add the phone number column to an existing table, run:

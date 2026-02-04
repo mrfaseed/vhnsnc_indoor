@@ -7,7 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../config.dart' as app_config;
 
 
-import 'package:google_fonts/google_fonts.dart';
+
 
 import 'admin_login.dart';
 import 'forget_password_screen.dart';
@@ -24,11 +24,16 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen>
     with SingleTickerProviderStateMixin {
   final _emailController = TextEditingController();
-  final _passwordController = TextEditingController();
+  final _otpController = TextEditingController(); // Replaced password controller
   final _formKey = GlobalKey<FormState>();
+  
+  // OTP Logic
+  final List<bool> _otpVisible = [false, false, false, false];
+  final List<Timer?> _otpTimers = [null, null, null, null];
+  final FocusNode _otpFocusNode = FocusNode();
+  int _lastOtpLength = 0;
 
   bool _isLoading = false;
-  bool _obscurePassword = true;
   String? _errorMessage;
 
   // Animation
@@ -93,7 +98,12 @@ class _LoginScreenState extends State<LoginScreen>
   @override
   void dispose() {
     _emailController.dispose();
-    _passwordController.dispose();
+    _emailController.dispose();
+    _otpController.dispose(); // Disposed otp controller
+    _otpFocusNode.dispose();
+    for (var timer in _otpTimers) {
+      timer?.cancel();
+    }
     _animController.dispose();
     super.dispose();
   }
@@ -115,7 +125,7 @@ class _LoginScreenState extends State<LoginScreen>
         url,
         body: {
           'email': _emailController.text,
-          'password': _passwordController.text,
+          'password': _otpController.text, // Sending OTP as 'password' for backend compatibility
         },
       ).timeout(
         const Duration(seconds: 10),
@@ -134,8 +144,7 @@ class _LoginScreenState extends State<LoginScreen>
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         if (data['success'] == true) {
-          // Store the token
-          // Store the token
+
           debugPrint("LOGIN SCREEN: Response Body: ${response.body}");
           
           final prefs = await SharedPreferences.getInstance();
@@ -150,8 +159,7 @@ class _LoginScreenState extends State<LoginScreen>
           } else {
              debugPrint("LOGIN SCREEN: ERROR - Token is NULL in Response!");
           }
-          // You can also store user data here if needed (e.g. using SharedPreferences)
-          // final user = data['user']; 
+
 
           await Navigator.pushReplacement(
             context,
@@ -176,13 +184,7 @@ class _LoginScreenState extends State<LoginScreen>
   }
   @override
   Widget build(BuildContext context) {
-    return Theme(
-      data: Theme.of(context).copyWith(
-        textTheme: GoogleFonts.outfitTextTheme(
-          Theme.of(context).textTheme,
-        ),
-      ),
-      child: Scaffold(
+    return Scaffold(
       body: AuroraBackground(
         colors: _background.colors,
         child: SafeArea(
@@ -335,95 +337,124 @@ class _LoginScreenState extends State<LoginScreen>
                           const SizedBox(height: 20),
 
                           // Password field
+                          // OTP Field
                           Padding(
                             padding: const EdgeInsets.only(bottom: 8),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Text(
-                                  "Password",
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.w600,
-                                    fontSize: 14,
-                                    color: _textPrimary,
-                                  ),
-                                ),
-                                TextButton(
-                                  onPressed: () {
-                                    Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (_) => const ForgotPasswordScreen(),
-                                      ),
-                                    );
-                                  },
-                                  style: TextButton.styleFrom(
-                                    padding: EdgeInsets.zero,
-                                    minimumSize: Size.zero,
-                                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                  ),
-                                  child: Text(
-                                    "Forgot Password?",
-                                    style: TextStyle(
-                                      color: _forgetpassYellow,
-                                      fontWeight: FontWeight.w600,
-                                      fontSize: 14,
-                                    ),
-                                  ),
-                                ),
-                              ],
+                            child: Text(
+                              "Enter 4-Digit PIN",
+                               style: TextStyle(
+                                fontWeight: FontWeight.w600,
+                                fontSize: 14,
+                                color: _textPrimary,
+                              ),
                             ),
                           ),
-                          TextFormField(
-                            controller: _passwordController,
-                            obscureText: _obscurePassword,
-                            textInputAction: TextInputAction.done,
-                            style: TextStyle(color: _textPrimary),
-                            decoration: InputDecoration(
-                              hintText: "Enter your password",
-                              hintStyle: TextStyle(color: _textSecondary.withOpacity(0.6)),
-                              prefixIcon: Icon(
-                                Icons.lock_outline_rounded,
-                                color: _textSecondary,
-                              ),
-                              suffixIcon: IconButton(
-                                onPressed: () {
-                                  setState(() {
-                                    _obscurePassword = !_obscurePassword;
-                                  });
-                                },
-                                icon: Icon(
-                                  _obscurePassword
-                                      ? Icons.visibility_outlined
-                                      : Icons.visibility_off_outlined,
-                                  color: _textSecondary,
+                          Stack(
+                            alignment: Alignment.center,
+                            children: [
+                              // Hidden TextField for input capture
+                              Opacity(
+                                opacity: 0,
+                                child: TextFormField(
+                                  controller: _otpController,
+                                  focusNode: _otpFocusNode,
+                                  keyboardType: TextInputType.number,
+                                  maxLength: 4,
+                                  onChanged: (value) {
+                                    setState(() {
+                                      if (value.length > _lastOtpLength) {
+                                        // Character added
+                                        int index = value.length - 1;
+                                        if (index < 4) {
+                                          _otpVisible[index] = true;
+                                          _otpTimers[index]?.cancel();
+                                          _otpTimers[index] = Timer(const Duration(seconds: 2), () {
+                                            if (mounted) {
+                                              setState(() {
+                                                _otpVisible[index] = false;
+                                              });
+                                            }
+                                          });
+                                        }
+                                      }
+                                      _lastOtpLength = value.length;
+                                    });
+                                  },
+                                  validator: (value) {
+                                    if (value == null || value.isEmpty) {
+                                      return 'Please enter PIN';
+                                    }
+                                    if (value.length != 4) {
+                                      return 'PIN must be exactly 4 digits';
+                                    }
+                                    return null;
+                                  },
+                                  onFieldSubmitted: (_) => _handleLogin(),
                                 ),
                               ),
-                              filled: true,
-                              fillColor: _surface,
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                borderSide: BorderSide(color: _borderColor),
+                              // Visible OTP Boxes
+                              GestureDetector(
+                                onTap: () {
+                                  FocusScope.of(context).requestFocus(_otpFocusNode);
+                                },
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: List.generate(4, (index) {
+                                    String char = "";
+                                    if (index < _otpController.text.length) {
+                                      char = _otpController.text[index];
+                                    }
+                                    
+                                    bool hasChar = char.isNotEmpty;
+                                    bool isVisible = _otpVisible[index];
+                                    bool isFocused = _otpFocusNode.hasFocus && index == _otpController.text.length;
+                                    
+                                    return AnimatedContainer(
+                                      duration: const Duration(milliseconds: 200),
+                                      curve: Curves.easeInOut,
+                                      width: 68,
+                                      height: 72,
+                                      alignment: Alignment.center,
+                                      decoration: BoxDecoration(
+                                        color: hasChar 
+                                            ? _surface 
+                                            : (isFocused ? _surface : Colors.grey.withOpacity(0.08)), // Subtle fill for empty state
+                                        borderRadius: BorderRadius.circular(16),
+                                        border: Border.all(
+                                          color: isFocused 
+                                              ? _primaryYellow 
+                                              : (hasChar ? _primaryYellow.withOpacity(0.5) : _borderColor.withOpacity(0.5)),
+                                          width: isFocused ? 2.5 : 1.5,
+                                        ),
+                                        boxShadow: [
+                                          if (isFocused)
+                                            BoxShadow(
+                                              color: _primaryYellow.withOpacity(0.25),
+                                              blurRadius: 16,
+                                              spreadRadius: 2,
+                                              offset: const Offset(0, 4),
+                                            )
+                                          else if (hasChar)
+                                            BoxShadow(
+                                              color: Colors.black.withOpacity(0.05),
+                                              blurRadius: 10,
+                                              offset: const Offset(0, 2),
+                                            ),
+                                        ],
+                                      ),
+                                      child: Text(
+                                        char.isEmpty ? "" : (isVisible ? char : "●"),
+                                        style: TextStyle(
+                                          fontSize: isVisible ? 28 : (char.isEmpty ? 28 : 24), // Adjust size for mask char
+                                          fontWeight: FontWeight.w700,
+                                          color: _textPrimary,
+                                        ),
+                                      ),
+                                    );
+                                  }),
+                                ),
                               ),
-                              enabledBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                borderSide: BorderSide(color: _borderColor),
-                              ),
-                              focusedBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                borderSide: BorderSide(color: _primaryYellow, width: 2),
-                              ),
-                            ),
-                            validator: (value) {
-                              if (value == null || value.isEmpty) {
-                                return 'Please enter your password';
-                              }
-                              if (value.length < 6) {
-                                return 'Password must be at least 6 characters';
-                              }
-                              return null;
-                            },
-                            onFieldSubmitted: (_) => _handleLogin(),
+                            ],
                           ),
                         ],
                       ),
@@ -535,10 +566,7 @@ class _LoginScreenState extends State<LoginScreen>
           ),
         ),
       ),
-      ),
-      ),
-    );
+    ),
+  );
   }
 }
-
-

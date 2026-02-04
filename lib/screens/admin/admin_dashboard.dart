@@ -8,6 +8,9 @@ import 'manage_announcements.dart';
 import 'admin_create_user.dart';
 import 'admin_qr_scan.dart';
 import 'user_search_delegate.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import '../../config.dart';
 
 class AdminDashboard extends StatefulWidget {
   const AdminDashboard({super.key});
@@ -23,6 +26,32 @@ class _AdminDashboardState extends State<AdminDashboard> {
   static const Color _background = Color(0xFFFBFBFB);
   static const Color _textPrimary = Color(0xFF212121);
   static const Color _textSecondary = Color(0xFF616161);
+
+  List<Payment> _recentPayments = []; // Requires Payment model from payment_overview.dart
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchRecentPayments();
+  }
+
+  Future<void> _fetchRecentPayments() async {
+    try {
+      final response = await http.get(Uri.parse('${Config.baseUrl}/get_all_payments.php'));
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data['success'] == true) {
+          final List<dynamic> paymentsJson = data['data'];
+          // Take only top 5 for dashboard
+          setState(() {
+            _recentPayments = paymentsJson.take(5).map((json) => Payment.fromJson(json)).toList();
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint("Error fetching recent payments: $e");
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -225,11 +254,15 @@ class _AdminDashboardState extends State<AdminDashboard> {
             const SizedBox(height: 12),
 
             // 3. Recent Payments List
-            ListView.builder(
+            _recentPayments.isEmpty 
+              ? const Center(child: Text("No recent payments", style: TextStyle(color: Colors.grey)))
+              : ListView.builder(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
-              itemCount: 3,
+              itemCount: _recentPayments.length,
               itemBuilder: (context, index) {
+                final payment = _recentPayments[index];
+                final isSuccess = payment.status == 'success';
                 return Container(
                   margin: const EdgeInsets.only(bottom: 12),
                   decoration: BoxDecoration(
@@ -238,16 +271,22 @@ class _AdminDashboardState extends State<AdminDashboard> {
                     border: Border.all(color: Colors.grey.shade100),
                   ),
                   child: ListTile(
-                    leading: const CircleAvatar(
-                      backgroundColor: _lightYellow,
-                      child: Icon(Icons.person, color: Colors.orange),
+                    leading: CircleAvatar(
+                      backgroundColor: isSuccess ? Colors.green[50] : Colors.orange[50],
+                      child: Icon(
+                        isSuccess ? Icons.check : Icons.access_time, 
+                        color: isSuccess ? Colors.green : Colors.orange
+                      ),
                     ),
-                    title: Text("Transaction #${1024 + index}",
+                    title: Text(payment.userName,
                         style: const TextStyle(fontWeight: FontWeight.w600)),
-                    subtitle: const Text("Jan 06, 2026 • 11:59 AM"),
-                    trailing: const Text(
-                      "₹500",
-                      style: TextStyle(fontWeight: FontWeight.bold, color: Colors.green),
+                    subtitle: Text("ID: ${payment.id} • ${payment.date.toString().split(' ')[0]}"),
+                    trailing: Text(
+                      "₹${payment.amount.toStringAsFixed(0)}",
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold, 
+                        color: isSuccess ? Colors.green : Colors.orange
+                      ),
                     ),
                   ),
                 );
