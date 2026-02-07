@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'login_screen.dart';
 import 'user/user_dashboard.dart';
+import 'admin/admin_dashboard.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -24,18 +25,27 @@ class _SplashScreenState extends State<SplashScreen> {
     try {
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString('jwt_token');
+      final role = prefs.getString('user_role'); // Get request role
 
       // Debugging: Print to console
       debugPrint("SPLASH SCREEN: Checking token...");
       debugPrint("SPLASH SCREEN: Token found: $token");
+      debugPrint("SPLASH SCREEN: Role found: $role");
 
       if (!mounted) return;
 
       if (token != null && token.isNotEmpty) {
-        debugPrint("SPLASH SCREEN: Navigating to Dashboard");
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => const UserDashboard()),
-        );
+        if (role == 'admin') {
+           debugPrint("SPLASH SCREEN: Navigating to Admin Dashboard");
+           Navigator.of(context).pushReplacement(
+            MaterialPageRoute(builder: (_) => const AdminDashboard()),
+          );
+        } else {
+          debugPrint("SPLASH SCREEN: Navigating to User Dashboard");
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(builder: (_) => const UserDashboard()),
+          );
+        }
       } else {
         debugPrint("SPLASH SCREEN: Navigating to Login");
         Navigator.of(context).pushReplacement(

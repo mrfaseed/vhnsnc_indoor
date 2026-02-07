@@ -3,6 +3,7 @@ import 'package:vhnsnc_indoor/screens/user/payment_history_screen.dart';
 
 // Ensure these paths match your project structure exactly
 import './../settings/settings.dart';
+import '../../screens/login_screen.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -81,6 +82,21 @@ class _UserDashboardState extends State<UserDashboard> {
     }
   }
 
+  Future<void> _handleLogout() async {
+    // Clear Session
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.clear();
+
+    if (!mounted) return;
+
+    // Navigate to Login
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(builder: (context) => const LoginScreen()),
+      (route) => false,
+    );
+  }
+
   // Helper function to navigate to a new screen
   void _navigateToScreen(BuildContext context, Widget screen) {
     Navigator.push(
@@ -131,7 +147,7 @@ class _UserDashboardState extends State<UserDashboard> {
           ),
         );
         if (shouldPop ?? false) {
-           if (context.mounted) Navigator.pop(context);
+           if (context.mounted) _handleLogout();
         }
       },
       child: Scaffold(
@@ -199,7 +215,7 @@ class _UserDashboardState extends State<UserDashboard> {
                                     TextButton(
                                       onPressed: () {
                                         Navigator.pop(context); // Close dialog
-                                        Navigator.pop(context); // Exit screen
+                                        _handleLogout();
                                       },
                                       style: TextButton.styleFrom(foregroundColor: Colors.red),
                                       child: const Text("Logout"),
@@ -502,3 +518,4 @@ class LightTheme {
 class DarkTheme {
   static const background = Color(0xFF0F172A);
 }
+

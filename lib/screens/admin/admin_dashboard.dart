@@ -11,6 +11,8 @@ import 'user_search_delegate.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import '../../config.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../login_screen.dart';
 
 class AdminDashboard extends StatefulWidget {
   const AdminDashboard({super.key});
@@ -29,10 +31,41 @@ class _AdminDashboardState extends State<AdminDashboard> {
 
   List<Payment> _recentPayments = []; // Requires Payment model from payment_overview.dart
 
+  // Dashboard Stats
+  String _totalUsers = "0";
+  String _paidMembers = "0";
+  String _pendingUsers = "0";
+  String _revenue = "0";
+
   @override
   void initState() {
     super.initState();
     _fetchRecentPayments();
+    _fetchDashboardStats();
+  }
+
+  Future<void> _fetchDashboardStats() async {
+    try {
+      final response = await http.get(Uri.parse('${Config.baseUrl}/get_dashboard_stats.php'));
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data['success'] == true && data['data'] != null) {
+          final stats = data['data'];
+          if (mounted) {
+            setState(() {
+              _totalUsers = stats['total_users'].toString();
+              _paidMembers = stats['paid_members'].toString();
+              _pendingUsers = stats['pending_users'].toString();
+              _revenue = stats['revenue'].toString();
+            });
+          }
+        }
+      } else {
+        debugPrint("Error fetching dashboard stats: Status Code ${response.statusCode}");
+      }
+    } catch (e) {
+      debugPrint("Error fetching dashboard stats: $e");
+    }
   }
 
   Future<void> _fetchRecentPayments() async {
@@ -51,6 +84,21 @@ class _AdminDashboardState extends State<AdminDashboard> {
     } catch (e) {
       debugPrint("Error fetching recent payments: $e");
     }
+  }
+
+  Future<void> _handleLogout() async {
+    // Clear Session
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.clear();
+
+    if (!mounted) return;
+
+    // Navigate to Login
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(builder: (context) => const LoginScreen()),
+      (route) => false,
+    );
   }
 
   @override
@@ -78,7 +126,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
           ),
         );
         if (shouldPop ?? false) {
-          if (context.mounted) Navigator.pop(context);
+          if (context.mounted) _handleLogout();
         }
       },
       child: Scaffold(
@@ -107,7 +155,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                     TextButton(
                       onPressed: () {
                         Navigator.pop(context); // Close dialog
-                        Navigator.pop(context); // Exit screen
+                        _handleLogout();
                       },
                       style: TextButton.styleFrom(foregroundColor: Colors.red),
                       child: const Text("Logout"),
@@ -144,10 +192,10 @@ class _AdminDashboardState extends State<AdminDashboard> {
               mainAxisSpacing: 15,
               childAspectRatio: 1.2,
               children: [
-                _buildStatCard("Total Users", "150", Icons.people_outline),
-                _buildStatCard("Paid Members", "120", Icons.verified_user_outlined),
-                _buildStatCard("Pending", "30", Icons.hourglass_empty_rounded),
-                _buildStatCard("Revenue", "₹45,000", Icons.account_balance_wallet_outlined),
+                _buildStatCard("Total Users", _totalUsers, Icons.people_outline),
+                _buildStatCard("Paid Members", _paidMembers, Icons.verified_user_outlined),
+                _buildStatCard("Pending", _pendingUsers, Icons.hourglass_empty_rounded),
+                _buildStatCard("Revenue", "₹${double.tryParse(_revenue)?.toStringAsFixed(0) ?? '0'}", Icons.account_balance_wallet_outlined),
               ],
             ),
 

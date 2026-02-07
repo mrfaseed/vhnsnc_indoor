@@ -11,9 +11,11 @@ $data = json_decode(file_get_contents("php://input"));
 if (isset($data->title) && isset($data->description)) {
     $title = $data->title;
     $description = $data->description;
+    $start_date = isset($data->start_date) && !empty($data->start_date) ? $data->start_date : null;
+    $end_date = isset($data->end_date) && !empty($data->end_date) ? $data->end_date : null;
 
-    $stmt = $conn->prepare("INSERT INTO announcements (title, description) VALUES (?, ?)");
-    $stmt->bind_param("ss", $title, $description);
+    $stmt = $conn->prepare("INSERT INTO announcements (title, description, start_date, end_date) VALUES (?, ?, ?, ?)");
+    $stmt->bind_param("ssss", $title, $description, $start_date, $end_date);
 
     if ($stmt->execute()) {
         echo json_encode(array("success" => true, "message" => "Announcement created successfully"));

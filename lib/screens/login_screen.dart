@@ -1,5 +1,6 @@
 ﻿import 'package:flutter/material.dart';
 import 'dart:async';
+import 'dart:io';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:http/http.dart' as http;
@@ -9,9 +10,9 @@ import '../config.dart' as app_config;
 
 
 
-import 'admin_login.dart';
 import 'forget_password_screen.dart';
 import 'user/user_dashboard.dart';
+import 'admin/admin_dashboard.dart'; // Suggesting adding this import for admin routing if file exists
 import '../widgets/aurora_background.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -35,6 +36,11 @@ class _LoginScreenState extends State<LoginScreen>
 
   bool _isLoading = false;
   String? _errorMessage;
+
+  // Admin Password Logic
+  bool _showPasswordInput = false;
+  final _passwordController = TextEditingController(); 
+  bool _obscurePassword = true;
 
   // Animation
   late AnimationController _animController;
@@ -98,8 +104,8 @@ class _LoginScreenState extends State<LoginScreen>
   @override
   void dispose() {
     _emailController.dispose();
-    _emailController.dispose();
-    _otpController.dispose(); // Disposed otp controller
+    _passwordController.dispose();
+    _otpController.dispose(); 
     _otpFocusNode.dispose();
     for (var timer in _otpTimers) {
       timer?.cancel();
@@ -121,14 +127,21 @@ class _LoginScreenState extends State<LoginScreen>
 
       final startTime = DateTime.now();
 
+      // Prepare body
+      Map<String, String> body = {
+        'email': _emailController.text,
+        'pin': _otpController.text, 
+      };
+
+      if (_showPasswordInput) {
+        body['password'] = _passwordController.text;
+      }
+
       final response = await http.post(
         url,
-        body: {
-          'email': _emailController.text,
-          'password': _otpController.text, // Sending OTP as 'password' for backend compatibility
-        },
+        body: body,
       ).timeout(
-        const Duration(seconds: 10),
+        const Duration(seconds: 30),
         onTimeout: () => throw TimeoutException("Connection timed out"),
       );
 
@@ -142,46 +155,82 @@ class _LoginScreenState extends State<LoginScreen>
       if (!mounted) return;
 
       if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        if (data['success'] == true) {
+        try {
+          final data = json.decode(response.body);
+          
+          if (data['success'] == true) {
+            // Login Successful
+             final prefs = await SharedPreferences.getInstance();
+            
+            if (data['token'] != null) {
+              await prefs.setString('jwt_token', data['token']);
+              
+              if (data['user'] != null) {
+                 await prefs.setString('user_id', data['user']['id'].toString());
+                 await prefs.setString('user_name', data['user']['name']);
+                 await prefs.setString('user_role', data['user']['role'] ?? 'user'); // Save Role
+              }
 
-          debugPrint("LOGIN SCREEN: Response Body: ${response.body}");
-          
-          final prefs = await SharedPreferences.getInstance();
-          
-          if (data['token'] != null) {
-            final token = data['token'];
-            debugPrint("LOGIN SCREEN: Saving Token: $token");
-            await prefs.setString('jwt_token', token);
-            await prefs.setString('user_id', data['user']['id'].toString());
-            await prefs.setString('user_name', data['user']['name']);
-            debugPrint("LOGIN SCREEN: Token & User Data Saved!");
+              if (!mounted) return;
+
+              // Navigate based on Role check or just dashboard
+              // Assuming same dashboard for now or handling inside UserDashboard
+              // But user explicitly asked for role based login.
+              // If Admin, maybe different dashboard? 
+              // Re-using UserDashboard for now as per previous code, or if you have AdminDashboard import it.
+              // Previous admin_login.dart went to AdminDashboard.
+              
+              if (data['user']['role'] == 'admin') {
+                 // Lazy import or route to AdminDashboard
+                  // Since I can't import AdminDashboard directly if I don't know path, 
+                  // I'll assume standard path or navigate to UserDashboard and let it handle/redirect 
+                  // or better, I checked admin_login.dart content earlier: import './admin/admin_dashboard.dart';
+                  // So I should import it here too.
+                  Navigator.pushReplacement(
+                    context, 
+                    MaterialPageRoute(builder: (context) => const AdminDashboard()) // Fixed import
+                  );
+              } else {
+                  Navigator.pushReplacement(
+                    context,
+                    MaterialPageRoute(builder: (context) => const UserDashboard()),
+                  );
+              }
+
+            }
+          } else if (data['require_password'] == true) {
+            // Step 2: Ask for Admin Password
+            setState(() {
+              _showPasswordInput = true;
+              _isLoading = false;
+              _errorMessage = null;
+            });
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text("PIN Verified. Please enter your Admin Password.")),
+            );
           } else {
-             debugPrint("LOGIN SCREEN: ERROR - Token is NULL in Response!");
+            setState(() => _errorMessage = data['message'] ?? 'Login failed');
           }
-
-
-          await Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (context) => const UserDashboard()),
-          );
-        } else {
-          setState(() => _errorMessage = data['message'] ?? 'Login failed');
+        } catch (e) {
+           setState(() => _errorMessage = "Invalid server response");
         }
       } else {
         setState(() => _errorMessage = "Server Error: ${response.statusCode}");
       }
 
+    } on TimeoutException catch (_) {
+      setState(() => _errorMessage = "Connection timed out. Please check your internet.");
+    } on SocketException catch (_) {
+      setState(() => _errorMessage = "No internet connection. Please check your network.");
     } catch (e) {
-      // This catches "Signal 3" related crashes or network errors
       setState(() => _errorMessage = "An unexpected error occurred: $e");
     } finally {
-      // ALWAYS happens, even if code crashes, ensuring button becomes clickable again
       if (mounted) {
         setState(() => _isLoading = false);
       }
     }
   }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -228,7 +277,7 @@ class _LoginScreenState extends State<LoginScreen>
 
                     // Header
                     Text(
-                      "Welcome Back",
+                      _showPasswordInput ? "Admin Verification" : "Welcome Back",
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         fontSize: 32,
@@ -239,7 +288,9 @@ class _LoginScreenState extends State<LoginScreen>
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      "Sign in to continue to your account",
+                      _showPasswordInput 
+                        ? "Please enter your password to continue" 
+                        : "Sign in to continue to your account",
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         fontSize: 16,
@@ -288,6 +339,10 @@ class _LoginScreenState extends State<LoginScreen>
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
+                           // Email & PIN Fields (Hide/Disable if in password step? Or keep visible)
+                           // Requirements: "The password input must not be shown unless the entered PIN is valid."
+                           // So we keep Email and PIN visible, maybe readonly?
+                           
                           // Email field
                           Padding(
                             padding: const EdgeInsets.only(bottom: 8),
@@ -304,6 +359,7 @@ class _LoginScreenState extends State<LoginScreen>
                             controller: _emailController,
                             keyboardType: TextInputType.emailAddress,
                             textInputAction: TextInputAction.next,
+                            readOnly: _showPasswordInput, // Readonly in Step 2
                             style: TextStyle(color: _textPrimary),
                             decoration: InputDecoration(
                               hintText: "Enter email or username",
@@ -336,8 +392,7 @@ class _LoginScreenState extends State<LoginScreen>
                           ),
                           const SizedBox(height: 20),
 
-                          // Password field
-                          // OTP Field
+                          // PIN Field
                           Padding(
                             padding: const EdgeInsets.only(bottom: 8),
                             child: Text(
@@ -349,100 +404,101 @@ class _LoginScreenState extends State<LoginScreen>
                               ),
                             ),
                           ),
-                          Stack(
-                            alignment: Alignment.center,
-                            children: [
-                              // Hidden TextField for input capture
-                              Opacity(
-                                opacity: 0,
-                                child: TextFormField(
-                                  controller: _otpController,
-                                  focusNode: _otpFocusNode,
-                                  keyboardType: TextInputType.number,
-                                  maxLength: 4,
-                                  onChanged: (value) {
-                                    setState(() {
-                                      if (value.length > _lastOtpLength) {
-                                        // Character added
-                                        int index = value.length - 1;
-                                        if (index < 4) {
-                                          _otpVisible[index] = true;
-                                          _otpTimers[index]?.cancel();
-                                          _otpTimers[index] = Timer(const Duration(seconds: 2), () {
-                                            if (mounted) {
-                                              setState(() {
-                                                _otpVisible[index] = false;
-                                              });
-                                            }
-                                          });
+                          AbsorbPointer(
+                            absorbing: _showPasswordInput, // Disable interaction in Step 2
+                            child: Stack(
+                              alignment: Alignment.center,
+                              children: [
+                                // Hidden TextField
+                                Opacity(
+                                  opacity: 0,
+                                  child: TextFormField(
+                                    controller: _otpController,
+                                    focusNode: _otpFocusNode,
+                                    keyboardType: TextInputType.number,
+                                    maxLength: 4,
+                                    onChanged: (value) {
+                                      setState(() {
+                                        if (value.length > _lastOtpLength) {
+                                          int index = value.length - 1;
+                                          if (index < 4) {
+                                            _otpVisible[index] = true;
+                                            _otpTimers[index]?.cancel();
+                                            _otpTimers[index] = Timer(const Duration(seconds: 2), () {
+                                              if (mounted) {
+                                                setState(() {
+                                                  _otpVisible[index] = false;
+                                                });
+                                              }
+                                            });
+                                          }
                                         }
+                                        _lastOtpLength = value.length;
+                                      });
+                                    },
+                                    validator: (value) {
+                                      if (value == null || value.isEmpty) {
+                                        return 'Please enter PIN';
                                       }
-                                      _lastOtpLength = value.length;
-                                    });
-                                  },
-                                  validator: (value) {
-                                    if (value == null || value.isEmpty) {
-                                      return 'Please enter PIN';
-                                    }
-                                    if (value.length != 4) {
-                                      return 'PIN must be exactly 4 digits';
-                                    }
-                                    return null;
-                                  },
-                                  onFieldSubmitted: (_) => _handleLogin(),
+                                      if (value.length != 4) {
+                                        return 'PIN must be exactly 4 digits';
+                                      }
+                                      return null;
+                                    },
+                                    onFieldSubmitted: (_) => _handleLogin(),
+                                  ),
                                 ),
-                              ),
-                              // Visible OTP Boxes
-                              GestureDetector(
-                                onTap: () {
-                                  FocusScope.of(context).requestFocus(_otpFocusNode);
-                                },
-                                child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                  children: List.generate(4, (index) {
-                                    String char = "";
-                                    if (index < _otpController.text.length) {
-                                      char = _otpController.text[index];
-                                    }
-                                    
-                                    bool hasChar = char.isNotEmpty;
-                                    bool isVisible = _otpVisible[index];
-                                    bool isFocused = _otpFocusNode.hasFocus && index == _otpController.text.length;
-                                    
-                                    return AnimatedContainer(
-                                      duration: const Duration(milliseconds: 200),
-                                      curve: Curves.easeInOut,
-                                      width: 68,
-                                      height: 72,
-                                      alignment: Alignment.center,
-                                      decoration: BoxDecoration(
-                                        color: hasChar 
-                                            ? _surface 
-                                            : (isFocused ? _surface : Colors.grey.withOpacity(0.08)), // Subtle fill for empty state
-                                        borderRadius: BorderRadius.circular(16),
-                                        border: Border.all(
-                                          color: isFocused 
-                                              ? _primaryYellow 
-                                              : (hasChar ? _primaryYellow.withOpacity(0.5) : _borderColor.withOpacity(0.5)),
-                                          width: isFocused ? 2.5 : 1.5,
+                                // Visible OTP Boxes
+                                GestureDetector(
+                                  onTap: () {
+                                    FocusScope.of(context).requestFocus(_otpFocusNode);
+                                  },
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: List.generate(4, (index) {
+                                      String char = "";
+                                      if (index < _otpController.text.length) {
+                                        char = _otpController.text[index];
+                                      }
+                                      
+                                      bool hasChar = char.isNotEmpty;
+                                      bool isVisible = _otpVisible[index];
+                                      bool isFocused = _otpFocusNode.hasFocus && index == _otpController.text.length;
+                                      
+                                      return AnimatedContainer(
+                                        duration: const Duration(milliseconds: 200),
+                                        curve: Curves.easeInOut,
+                                        width: 68,
+                                        height: 72,
+                                        alignment: Alignment.center,
+                                        decoration: BoxDecoration(
+                                          color: hasChar 
+                                              ? _surface 
+                                              : (isFocused ? _surface : Colors.grey.withOpacity(0.08)), // Subtle fill for empty state
+                                          borderRadius: BorderRadius.circular(16),
+                                          border: Border.all(
+                                            color: isFocused 
+                                                ? _primaryYellow 
+                                                : (hasChar ? _primaryYellow.withOpacity(0.5) : _borderColor.withOpacity(0.5)),
+                                            width: isFocused ? 2.5 : 1.5,
+                                          ),
+                                          boxShadow: [
+                                            if (isFocused)
+                                              BoxShadow(
+                                                color: _primaryYellow.withOpacity(0.25),
+                                                blurRadius: 16,
+                                                spreadRadius: 2,
+                                                offset: const Offset(0, 4),
+                                              )
+                                            else if (hasChar)
+                                              BoxShadow(
+                                                color: Colors.black.withOpacity(0.05),
+                                                blurRadius: 10,
+                                                offset: const Offset(0, 2),
+                                              ),
+                                          ],
                                         ),
-                                        boxShadow: [
-                                          if (isFocused)
-                                            BoxShadow(
-                                              color: _primaryYellow.withOpacity(0.25),
-                                              blurRadius: 16,
-                                              spreadRadius: 2,
-                                              offset: const Offset(0, 4),
-                                            )
-                                          else if (hasChar)
-                                            BoxShadow(
-                                              color: Colors.black.withOpacity(0.05),
-                                              blurRadius: 10,
-                                              offset: const Offset(0, 2),
-                                            ),
-                                        ],
-                                      ),
-                                      child: Text(
+                                        child: Text(
                                         char.isEmpty ? "" : (isVisible ? char : "●"),
                                         style: TextStyle(
                                           fontSize: isVisible ? 28 : (char.isEmpty ? 28 : 24), // Adjust size for mask char
@@ -450,12 +506,54 @@ class _LoginScreenState extends State<LoginScreen>
                                           color: _textPrimary,
                                         ),
                                       ),
-                                    );
-                                  }),
+                                      );
+                                    }),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          
+                          // Step 2: Admin Password Field
+                          if (_showPasswordInput) ...[
+                            const SizedBox(height: 20),
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 8),
+                              child: Text(
+                                "Admin Password",
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 14,
+                                  color: _textPrimary,
                                 ),
                               ),
-                            ],
-                          ),
+                            ),
+                            TextFormField(
+                              controller: _passwordController,
+                              obscureText: _obscurePassword,
+                              decoration: InputDecoration(
+                                hintText: "Enter admin password",
+                                hintStyle: TextStyle(color: _textSecondary.withOpacity(0.6)),
+                                prefixIcon: const Icon(Icons.lock_outline_rounded),
+                                suffixIcon: IconButton(
+                                  icon: Icon(_obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined),
+                                  onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                                ),
+                                filled: true,
+                                fillColor: _surface,
+                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: _borderColor)),
+                                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: _primaryYellow, width: 2)),
+                              ),
+                              validator: (value) {
+                                if (_showPasswordInput && (value == null || value.isEmpty)) {
+                                  return 'Please enter password';
+                                }
+                                return null;
+                              },
+                            ),
+                          ],
+
                         ],
                       ),
                     ),
@@ -490,7 +588,7 @@ class _LoginScreenState extends State<LoginScreen>
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             Text(
-                              "Sign In",
+                              _showPasswordInput ? "Verify & Login" : "Continue",
                               style: TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.w600,
@@ -508,57 +606,15 @@ class _LoginScreenState extends State<LoginScreen>
                       ),
                     ),
                     const SizedBox(height: 32),
-
-                    // Divider
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Divider(
-                            color: _borderColor,
-                            thickness: 1,
-                          ),
-                        ),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                          child: Text(
-                            "OR",
-                            style: TextStyle(
-                              color: _textSecondary,
-                              fontSize: 14,
-                            ),
-                          ),
-                        ),
-                        Expanded(
-                          child: Divider(
-                            color: _borderColor,
-                            thickness: 1,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 24),
-
-                    const SizedBox(height: 16),
-                    TextButton(
-                      onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => const AdminLoginScreen(),
-                          ),
-                        );
-                      },
-                      style: TextButton.styleFrom(
-                        foregroundColor: _textSecondary,
-                      ),
+                    
+                    const SizedBox(height: 40),
+                    Center(
                       child: Text(
-                        "Admin Login",
-                        style: TextStyle(
-                          color: _textSecondary,
-                          fontSize: 14,
-                        ),
+                        "© 2026 DigiTech, VHNSNC. All rights reserved.",
+                        style: TextStyle(color: _textSecondary.withOpacity(0.5), fontSize: 12),
                       ),
                     ),
+                    const SizedBox(height: 20),
                   ],
                 ),
               ),

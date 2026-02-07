@@ -4,11 +4,7 @@ header("Content-Type: application/json; charset=UTF-8");
 
 require 'db_connect.php';
 
-$current_date = date('Y-m-d');
-$sql = "SELECT id, title, description, start_date, end_date, created_at FROM announcements 
-        WHERE (start_date IS NULL OR start_date <= '$current_date') 
-        AND (end_date IS NULL OR end_date >= '$current_date')
-        ORDER BY created_at DESC";
+$sql = "SELECT id, title, description, start_date, end_date, created_at FROM announcements ORDER BY created_at DESC";
 $result = $conn->query($sql);
 
 $announcements = array();
