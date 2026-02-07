@@ -235,7 +235,7 @@ class _LoginScreenState extends State<LoginScreen>
     return Scaffold(
       body: Theme(
         data: Theme.of(context).copyWith(
-          textTheme: Theme.of(context).textTheme.apply(fontFamily: 'Inter'),
+          textTheme: Theme.of(context).textTheme.apply(fontFamily: 'Manrope'),
         ),
         child: AuroraBackground(
           colors: _background.colors,

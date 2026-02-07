@@ -155,15 +155,13 @@ class _UserDashboardState extends State<UserDashboard> {
       backgroundColor: LightTheme.background,
       body: Theme(
         data: Theme.of(context).copyWith(
-          textTheme: Theme.of(context).textTheme.apply(fontFamily: 'Inter'),
+          textTheme: Theme.of(context).textTheme.apply(fontFamily: 'Manrope'),
         ),
         child: _isLoading 
           ? const Center(child: CircularProgressIndicator(color: Colors.amber))
-          : SingleChildScrollView(
-          physics: const BouncingScrollPhysics(),
-          child: Column(
-            children: [
-              // --- HEADER SECTION ---
+          : Column(
+          children: [
+            // --- HEADER SECTION ---
               Container(
                 padding: const EdgeInsets.fromLTRB(20, 60, 20, 40),
                 decoration: const BoxDecoration(
@@ -341,17 +339,21 @@ class _UserDashboardState extends State<UserDashboard> {
                 ],
               ),
             ),
-            const SizedBox(height: 24),
-
-            // --- QUICK ACTIONS GRID ---
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: GridView.count(
+            
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    // --- QUICK ACTIONS GRID ---
+                    GridView.count(
                 crossAxisCount: 2,
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
                 crossAxisSpacing: 16,
                 mainAxisSpacing: 16,
+                padding: EdgeInsets.zero,
                 children: [
                   _ActionCard(
                     icon: Icons.badge_outlined,
@@ -385,13 +387,9 @@ class _UserDashboardState extends State<UserDashboard> {
                   ),
                 ],
               ),
-            ),
-            const SizedBox(height: 20),
-
+            
             // --- PAYMENT HISTORY TILE ---
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Container(
+            Container(
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(16),
@@ -436,11 +434,13 @@ class _UserDashboardState extends State<UserDashboard> {
                   ),
                 ),
               ),
+              ],
+             ),
             ),
-            const SizedBox(height: 40),
+            ),
+            const SizedBox(height: 20),
           ],
         ),
-      ),
       ),
       ),
     );
@@ -512,26 +512,26 @@ class LightTheme {
     fontWeight: FontWeight.w800, // Reduced from bold
     color: Colors.white,
     letterSpacing: -0.5, // Reduced from 0.5
-    fontFamily: 'Inter',
+    fontFamily: 'Manrope',
   );
 
   static const subTextWhite = TextStyle(
     color: Colors.white70,
     fontSize: 14,
-    fontFamily: 'Inter',
+    fontFamily: 'Manrope',
   );
 
   static const bodyText = TextStyle(
     fontSize: 16,
     fontWeight: FontWeight.w600,
     color: Color(0xFF111827),
-    fontFamily: 'Inter',
+    fontFamily: 'Manrope',
   );
 
   static const subText = TextStyle(
     fontSize: 13,
     color: Color(0xFF6B7280),
-    fontFamily: 'Inter',
+    fontFamily: 'Manrope',
   );
 }
 
