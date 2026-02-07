@@ -155,7 +155,7 @@ class _UserDashboardState extends State<UserDashboard> {
       backgroundColor: LightTheme.background,
       body: Theme(
         data: Theme.of(context).copyWith(
-          textTheme: Theme.of(context).textTheme.apply(fontFamily: 'Poppins'),
+          textTheme: Theme.of(context).textTheme.apply(fontFamily: 'Inter'),
         ),
         child: _isLoading 
           ? const Center(child: CircularProgressIndicator(color: Colors.amber))
@@ -197,7 +197,7 @@ class _UserDashboardState extends State<UserDashboard> {
                                 _userName, 
                                 style: LightTheme.headingWhite,
                                 overflow: TextOverflow.ellipsis, // Add ellipsis
-                                maxLines: 1, 
+                                maxLines: 1,
                               ),
                             ],
                           ),
@@ -509,29 +509,29 @@ class LightTheme {
 
   static const headingWhite = TextStyle(
     fontSize: 20, // Reduced from 24
-    fontWeight: FontWeight.bold,
+    fontWeight: FontWeight.w800, // Reduced from bold
     color: Colors.white,
     letterSpacing: -0.5, // Reduced from 0.5
-    fontFamily: 'Poppins',
+    fontFamily: 'Inter',
   );
 
   static const subTextWhite = TextStyle(
     color: Colors.white70,
     fontSize: 14,
-    fontFamily: 'Poppins',
+    fontFamily: 'Inter',
   );
 
   static const bodyText = TextStyle(
     fontSize: 16,
-    fontWeight: FontWeight.w700,
+    fontWeight: FontWeight.w600,
     color: Color(0xFF111827),
-    fontFamily: 'Poppins',
+    fontFamily: 'Inter',
   );
 
   static const subText = TextStyle(
     fontSize: 13,
     color: Color(0xFF6B7280),
-    fontFamily: 'Poppins',
+    fontFamily: 'Inter',
   );
 }
 
