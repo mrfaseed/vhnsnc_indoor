@@ -7,7 +7,7 @@ import 'package:intl/intl.dart';
 import 'package:vhnsnc_indoor/config.dart' as app_config;
 import '../../config.dart';
 import '../create_account.dart'; // For LoginScreen redirect
-import 'edit_profile_screen.dart';
+import 'profile_edit_screen.dart';
 
 // Simple data model to mimic your "useAuth" user object
 class UserProfile {
@@ -278,7 +278,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       fontWeight: FontWeight.bold,
                       color: Colors.black87)),
               TextButton.icon(
-                onPressed: () {},
+                onPressed: () async {
+                  final result = await Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => ProfileEditScreen(
+                        userId: user.id,
+                        currentPhone: user.phone,
+                        userEmail: user.email,
+                      ),
+                    ),
+                  );
+
+                  if (result == true) {
+                    _fetchUserData();
+                  }
+                },
                 icon: const Icon(Icons.edit, size: 16, color: Colors.orange),
                 label: const Text("Edit", style: TextStyle(color: Colors.orange)),
               )

@@ -127,6 +127,7 @@ class _UserDashboardState extends State<UserDashboard> {
     return PopScope(
       canPop: false,
       onPopInvoked: (bool didPop) async {
+        // ... (existing pop logic kept as is, just ensuring context) ...
         if (didPop) return;
         final shouldPop = await showDialog<bool>(
           context: context,
@@ -152,88 +153,102 @@ class _UserDashboardState extends State<UserDashboard> {
       },
       child: Scaffold(
       backgroundColor: LightTheme.background,
-      body: _isLoading 
-        ? const Center(child: CircularProgressIndicator(color: Colors.amber))
-        : SingleChildScrollView(
-        physics: const BouncingScrollPhysics(),
-        child: Column(
-          children: [
-            // --- HEADER SECTION ---
-            Container(
-              padding: const EdgeInsets.fromLTRB(20, 60, 20, 40),
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    Color(0xFFFFC107), // warm golden yellow
-                    Color(0xFFFFA000), // deeper amber
-                  ],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                borderRadius: BorderRadius.only(
-                  bottomLeft: Radius.circular(32),
-                  bottomRight: Radius.circular(32),
-                ),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('Welcome Back,', style: LightTheme.subTextWhite),
-                          const SizedBox(height: 4),
-                          Text(_userName, style: LightTheme.headingWhite),
-                        ],
-                      ),
-                      Row(
-                        children: [
-                          IconButton(
-                            onPressed: () => _navigateToScreen(context, const SettingsScreen()),
-                            icon: const Icon(Icons.settings_outlined),
-                            color: Colors.white,
-                            style: IconButton.styleFrom(
-                              backgroundColor: Colors.white24,
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          IconButton(
-                            onPressed: () {
-                              showDialog(
-                                context: context,
-                                builder: (context) => AlertDialog(
-                                  title: const Text("Logout"),
-                                  content: const Text("Are you sure you want to logout?"),
-                                  actions: [
-                                    TextButton(
-                                      onPressed: () => Navigator.pop(context),
-                                      child: const Text("Cancel"),
-                                    ),
-                                    TextButton(
-                                      onPressed: () {
-                                        Navigator.pop(context); // Close dialog
-                                        _handleLogout();
-                                      },
-                                      style: TextButton.styleFrom(foregroundColor: Colors.red),
-                                      child: const Text("Logout"),
-                                    ),
-                                  ],
-                                ),
-                              );
-                            },
-                            icon: const Icon(Icons.logout),
-                            color: Colors.white,
-                            style: IconButton.styleFrom(
-                              backgroundColor: Colors.white24,
-                            ),
-                          ),
-                        ],
-                      )
+      body: Theme(
+        data: Theme.of(context).copyWith(
+          textTheme: Theme.of(context).textTheme.apply(fontFamily: 'Poppins'),
+        ),
+        child: _isLoading 
+          ? const Center(child: CircularProgressIndicator(color: Colors.amber))
+          : SingleChildScrollView(
+          physics: const BouncingScrollPhysics(),
+          child: Column(
+            children: [
+              // --- HEADER SECTION ---
+              Container(
+                padding: const EdgeInsets.fromLTRB(20, 60, 20, 40),
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      Color(0xFFFFC107), // warm golden yellow
+                      Color(0xFFFFA000), // deeper amber
                     ],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
                   ),
+                  borderRadius: BorderRadius.only(
+                    bottomLeft: Radius.circular(32),
+                    bottomRight: Radius.circular(32),
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      crossAxisAlignment: CrossAxisAlignment.start, // Align to top
+                      children: [
+                        Expanded( // Fix: Wrapped in Expanded to prevent overflow
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('Welcome Back,', style: LightTheme.subTextWhite),
+                              const SizedBox(height: 4),
+                              Text(
+                                _userName, 
+                                style: LightTheme.headingWhite,
+                                overflow: TextOverflow.ellipsis, // Add ellipsis
+                                maxLines: 1, 
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 8), // Spacing between text and buttons
+                        Row(
+                          mainAxisSize: MainAxisSize.min, // Essential for Row inside Row
+                          children: [
+                            IconButton(
+                              onPressed: () => _navigateToScreen(context, const SettingsScreen()),
+                              icon: const Icon(Icons.settings_outlined),
+                              color: Colors.white,
+                              style: IconButton.styleFrom(
+                                backgroundColor: Colors.white24,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            IconButton(
+                              onPressed: () {
+                                showDialog(
+                                  context: context,
+                                  builder: (context) => AlertDialog(
+                                    title: const Text("Logout"),
+                                    content: const Text("Are you sure you want to logout?"),
+                                    actions: [
+                                      TextButton(
+                                        onPressed: () => Navigator.pop(context),
+                                        child: const Text("Cancel"),
+                                      ),
+                                      TextButton(
+                                        onPressed: () {
+                                          Navigator.pop(context); // Close dialog
+                                          _handleLogout();
+                                        },
+                                        style: TextButton.styleFrom(foregroundColor: Colors.red),
+                                        child: const Text("Logout"),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              },
+                              icon: const Icon(Icons.logout),
+                              color: Colors.white,
+                              style: IconButton.styleFrom(
+                                backgroundColor: Colors.white24,
+                              ),
+                            ),
+                          ],
+                        )
+                      ],
+                    ),
                   const SizedBox(height: 24),
 
                   // --- MEMBERSHIP STATUS CARD ---
@@ -427,6 +442,7 @@ class _UserDashboardState extends State<UserDashboard> {
         ),
       ),
       ),
+      ),
     );
   }
 }
@@ -492,26 +508,30 @@ class LightTheme {
   static const background = Color(0xFFF9FAFB);
 
   static const headingWhite = TextStyle(
-    fontSize: 24,
+    fontSize: 20, // Reduced from 24
     fontWeight: FontWeight.bold,
     color: Colors.white,
-    letterSpacing: 0.5,
+    letterSpacing: -0.5, // Reduced from 0.5
+    fontFamily: 'Poppins',
   );
 
   static const subTextWhite = TextStyle(
     color: Colors.white70,
     fontSize: 14,
+    fontFamily: 'Poppins',
   );
 
   static const bodyText = TextStyle(
     fontSize: 16,
     fontWeight: FontWeight.w700,
     color: Color(0xFF111827),
+    fontFamily: 'Poppins',
   );
 
   static const subText = TextStyle(
     fontSize: 13,
     color: Color(0xFF6B7280),
+    fontFamily: 'Poppins',
   );
 }
 

@@ -4,19 +4,26 @@ import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../config.dart';
 
-class EditProfileScreen extends StatefulWidget {
+class ProfileEditScreen extends StatefulWidget {
   final String currentPhone;
+  final String userEmail;
   final String userId;
 
-  const EditProfileScreen({super.key, required this.currentPhone, required this.userId});
+  const ProfileEditScreen({
+    super.key, 
+    required this.userId,
+    required this.currentPhone, 
+    required this.userEmail,
+  });
 
   @override
-  State<EditProfileScreen> createState() => _EditProfileScreenState();
+  State<ProfileEditScreen> createState() => _ProfileEditScreenState();
 }
 
-class _EditProfileScreenState extends State<EditProfileScreen> {
+class _ProfileEditScreenState extends State<ProfileEditScreen> {
   final _formKey = GlobalKey<FormState>();
   late TextEditingController _phoneController;
+  late TextEditingController _emailController;
   final TextEditingController _passwordController = TextEditingController();
   final TextEditingController _confirmPasswordController = TextEditingController();
   bool _isLoading = false;
@@ -26,6 +33,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   void initState() {
     super.initState();
     _phoneController = TextEditingController(text: widget.currentPhone);
+    _emailController = TextEditingController(text: widget.userEmail);
   }
 
   Future<void> _updateProfile() async {
@@ -38,6 +46,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         Uri.parse('${Config.baseUrl}/update_profile.php'),
         body: {
           'id': widget.userId,
+          'email': _emailController.text.trim(),
           'phone': _phoneController.text.trim(),
           'password': _passwordController.text.trim(), // Send empty if not changing
         },
@@ -46,9 +55,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       final data = json.decode(response.body);
 
       if (data['success'] == true) {
-        // Update local storage if phone changed
+        // Update local storage
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString('user_phone', _phoneController.text.trim());
+        await prefs.setString('user_email', _emailController.text.trim());
         
         if (mounted) {
            ScaffoldMessenger.of(context).showSnackBar(
@@ -94,6 +104,25 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               const Text("Update your details", style: TextStyle(fontSize: 16, color: Colors.grey)),
               const SizedBox(height: 24),
               
+              // Email Field
+              TextFormField(
+                controller: _emailController,
+                keyboardType: TextInputType.emailAddress,
+                decoration: InputDecoration(
+                  labelText: "Email Address",
+                  prefixIcon: const Icon(Icons.email_outlined),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  filled: true,
+                  fillColor: Colors.grey[50],
+                ),
+                validator: (value) {
+                  if (value == null || value.isEmpty) return 'Please enter email';
+                  if (!value.contains('@')) return 'Enter a valid email';
+                  return null;
+                },
+              ),
+              const SizedBox(height: 24),
+
               // Phone Field
               TextFormField(
                 controller: _phoneController,
