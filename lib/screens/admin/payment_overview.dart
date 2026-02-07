@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import '../../config.dart';
 
 // Model for Payment Data
 class Payment {
@@ -7,17 +10,28 @@ class Payment {
   final String userName;
   final double amount;
   final DateTime date;
-  final String razorpayPaymentId;
-  final String status; // 'success', 'pending', 'failed'
+  final String description;
+  final String status; // 'paid' -> 'success'
 
   Payment({
     required this.id,
     required this.userName,
     required this.amount,
     required this.date,
-    required this.razorpayPaymentId,
+    required this.description,
     required this.status,
   });
+
+  factory Payment.fromJson(Map<String, dynamic> json) {
+    return Payment(
+      id: json['id'].toString(),
+      userName: json['user_name'] ?? 'Unknown',
+      amount: double.tryParse(json['amount'].toString()) ?? 0.0,
+      date: DateTime.tryParse(json['payment_date'] ?? '') ?? DateTime.now(),
+      description: json['description'] ?? '',
+      status: json['payment_status'] == 'paid' ? 'success' : 'pending',
+    );
+  }
 }
 
 class PaymentsOverview extends StatefulWidget {
@@ -29,24 +43,45 @@ class PaymentsOverview extends StatefulWidget {
 
 class _PaymentsOverviewState extends State<PaymentsOverview> {
   String filterStatus = 'all';
+  List<Payment> _allPayments = [];
+  bool _isLoading = true;
 
-  // Mock Data (In a real app, this comes from your Provider/Data Context)
-  final List<Payment> payments = [
-    Payment(id: 'tx101', userName: 'John Doe', amount: 5000, date: DateTime.now(), razorpayPaymentId: 'pay_Nsh291', status: 'success'),
-    Payment(id: 'tx102', userName: 'Jane Smith', amount: 1200, date: DateTime.now(), razorpayPaymentId: 'pay_Msh882', status: 'pending'),
-    Payment(id: 'tx103', userName: 'Alex Carry', amount: 3500, date: DateTime.now(), razorpayPaymentId: 'pay_Lsh112', status: 'failed'),
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _fetchPayments();
+  }
+
+  Future<void> _fetchPayments() async {
+    setState(() => _isLoading = true);
+    try {
+      final response = await http.get(Uri.parse('${Config.baseUrl}/get_all_payments.php'));
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data['success'] == true) {
+          final List<dynamic> paymentsJson = data['data'];
+          setState(() {
+            _allPayments = paymentsJson.map((json) => Payment.fromJson(json)).toList();
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint("Error fetching payments: $e");
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
 
   List<Payment> get filteredPayments {
-    if (filterStatus == 'all') return payments;
-    return payments.where((p) => p.status == filterStatus).toList();
+    if (filterStatus == 'all') return _allPayments;
+    return _allPayments.where((p) => p.status == filterStatus).toList();
   }
 
   // Stats Calculations
-  double get totalRevenue => payments.where((p) => p.status == 'success').fold(0, (sum, p) => sum + p.amount);
-  int get successfulCount => payments.where((p) => p.status == 'success').length;
-  int get pendingCount => payments.where((p) => p.status == 'pending').length;
-  int get failedCount => payments.where((p) => p.status == 'failed').length;
+  double get totalRevenue => _allPayments.where((p) => p.status == 'success').fold(0, (sum, p) => sum + p.amount);
+  int get successfulCount => _allPayments.where((p) => p.status == 'success').length;
+  int get pendingCount => _allPayments.where((p) => p.status == 'pending').length;
+  int get failedCount => _allPayments.where((p) => p.status == 'failed').length;
 
   @override
   Widget build(BuildContext context) {
@@ -64,83 +99,80 @@ class _PaymentsOverviewState extends State<PaymentsOverview> {
           style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
         ),
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // --- Stats Grid ---
-            LayoutBuilder(builder: (context, constraints) {
-              return Wrap(
-                spacing: 16,
-                runSpacing: 16,
+      body: _isLoading 
+        ? const Center(child: CircularProgressIndicator(color: Colors.amber))
+        : RefreshIndicator(
+            onRefresh: _fetchPayments,
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(16.0),
+              physics: const AlwaysScrollableScrollPhysics(),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _buildStatCard('Total Revenue', '₹${totalRevenue.toStringAsFixed(0)}', Colors.amber[800]!, constraints),
-                  _buildStatCard('Successful', '$successfulCount', Colors.green, constraints),
-                  _buildStatCard('Pending', '$pendingCount', Colors.amber[600]!, constraints),
-                  _buildStatCard('Failed', '$failedCount', Colors.red, constraints),
-                ],
-              );
-            }),
+                  // --- Stats Grid ---
+                  LayoutBuilder(builder: (context, constraints) {
+                    return Wrap(
+                      spacing: 16,
+                      runSpacing: 16,
+                      children: [
+                        _buildStatCard('Total Revenue', '₹${totalRevenue.toStringAsFixed(0)}', Colors.amber[800]!, constraints),
+                        _buildStatCard('Successful', '$successfulCount', Colors.green, constraints),
+                        _buildStatCard('Pending', '$pendingCount', Colors.amber[600]!, constraints),
+                        _buildStatCard('Failed', '$failedCount', Colors.red, constraints),
+                      ],
+                    );
+                  }),
 
-            const SizedBox(height: 32),
+                  const SizedBox(height: 32),
 
-            // --- Filters and Export ---
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                _buildFilterDropdown(),
-                ElevatedButton.icon(
-                  onPressed: () {},
-                  icon: const Icon(Icons.download, size: 18),
-                  label: const Text('Export CSV'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.amber[700],
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  // --- Filters and Export ---
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      _buildFilterDropdown(),
+                      // Export button removed for simplicity or can be kept if functional logic exists
+                    ],
                   ),
-                ),
-              ],
-            ),
 
-            const SizedBox(height: 16),
+                  const SizedBox(height: 16),
 
-            // --- Payments Table (List View for Mobile) ---
-            Container(
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10)],
-              ),
-              child: filteredPayments.isEmpty
-                  ? const Padding(
-                padding: EdgeInsets.all(40.0),
-                child: Center(child: Text('No payments found matching your criteria')),
-              )
-                  : Column(
-                children: [
-                  _buildTableHeader(),
-                  ListView.separated(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    itemCount: filteredPayments.length,
-                    separatorBuilder: (context, index) => const Divider(height: 1),
-                    itemBuilder: (context, index) => _buildPaymentRow(filteredPayments[index]),
+                  // --- Payments Table (List View for Mobile) ---
+                  Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10)],
+                    ),
+                    child: filteredPayments.isEmpty
+                        ? const Padding(
+                      padding: EdgeInsets.all(40.0),
+                      child: Center(child: Text('No payments found matching your criteria')),
+                    )
+                        : Column(
+                      children: [
+                        _buildTableHeader(),
+                        ListView.separated(
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          itemCount: filteredPayments.length,
+                          separatorBuilder: (context, index) => const Divider(height: 1),
+                          itemBuilder: (context, index) => _buildPaymentRow(filteredPayments[index]),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  Padding(
+                    padding: const EdgeInsets.only(top: 16),
+                    child: Text(
+                      'Showing ${filteredPayments.length} of ${_allPayments.length} payments',
+                      style: TextStyle(color: Colors.grey[600]),
+                    ),
                   ),
                 ],
               ),
             ),
-
-            Padding(
-              padding: const EdgeInsets.only(top: 16),
-              child: Text(
-                'Showing ${filteredPayments.length} of ${payments.length} payments',
-                style: TextStyle(color: Colors.grey[600]),
-              ),
-            ),
-          ],
-        ),
-      ),
+          ),
     );
   }
 

@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import '../../config.dart';
 
 // --- Models ---
 class UserAccount {
@@ -20,6 +23,18 @@ class UserAccount {
     required this.memberSince,
     required this.membershipExpiry,
   });
+
+  factory UserAccount.fromJson(Map<String, dynamic> json) {
+    return UserAccount(
+      id: json['id'].toString(),
+      name: json['name'] ?? 'Unknown',
+      email: json['email'] ?? '',
+      phone: json['phone'] ?? '',
+      membershipStatus: json['membership_status'] ?? 'unpaid',
+      memberSince: DateTime.tryParse(json['created_at'] ?? '') ?? DateTime.now(),
+      membershipExpiry: DateTime.tryParse(json['membership_expiry'] ?? '') ?? DateTime.now(),
+    );
+  }
 }
 
 class UserPayment {
@@ -29,6 +44,15 @@ class UserPayment {
   final String status; // 'success', 'failed'
 
   UserPayment({required this.id, required this.amount, required this.date, required this.status});
+
+  factory UserPayment.fromJson(Map<String, dynamic> json) {
+    return UserPayment(
+      id: json['id'].toString(),
+      amount: double.tryParse(json['amount'].toString()) ?? 0.0,
+      date: DateTime.tryParse(json['payment_date'] ?? '') ?? DateTime.now(),
+      status: json['payment_status'] ?? 'success',
+    );
+  }
 }
 
 class UserDetailScreen extends StatefulWidget {
@@ -40,94 +64,143 @@ class UserDetailScreen extends StatefulWidget {
 }
 
 class _UserDetailScreenState extends State<UserDetailScreen> {
-  bool _showSuccess = false;
-
-  // Mock Data
-  late UserAccount user;
-  late List<UserPayment> payments;
+  bool _isLoading = true;
+  String? _errorMessage;
+  UserAccount? user;
+  List<UserPayment> payments = [];
 
   @override
   void initState() {
     super.initState();
-    // In real app, fetch based on widget.userId
-    user = UserAccount(
-      id: widget.userId,
-      name: "Muhammad Fazid",
-      email: "fazid@example.com",
-      phone: "+91 98765 43210",
-      membershipStatus: "paid",
-      memberSince: DateTime(2023, 9, 15),
-      membershipExpiry: DateTime(2026, 9, 15),
-    );
-    payments = [
-      UserPayment(id: "1", amount: 1500, date: DateTime.now(), status: "success"),
-      UserPayment(id: "2", amount: 1500, date: DateTime.now().subtract(const Duration(days: 30)), status: "success"),
-    ];
+    _fetchData();
   }
 
-  void _handleStatusUpdate(String status) {
-    setState(() => _showSuccess = true);
-    Future.delayed(const Duration(seconds: 3), () {
-      if (mounted) setState(() => _showSuccess = false);
-    });
+  Future<void> _fetchData() async {
+    setState(() => _isLoading = true);
+    try {
+      // 1. Fetch User Details
+      final userResponse = await http.get(Uri.parse('${Config.baseUrl}/get_user_details.php?user_id=${widget.userId}'));
+      
+      // 2. Fetch Payment History
+      final paymentResponse = await http.get(Uri.parse('${Config.baseUrl}/get_payment_history.php?user_id=${widget.userId}'));
+
+      if (userResponse.statusCode == 200) {
+        final userData = json.decode(userResponse.body);
+        
+        if (userData['success'] == true) {
+          final userObj = UserAccount.fromJson(userData['data']);
+          
+          List<UserPayment> paymentList = [];
+          if (paymentResponse.statusCode == 200) {
+            final paymentData = json.decode(paymentResponse.body);
+            if (paymentData['success'] == true) {
+              paymentList = (paymentData['data'] as List).map((e) => UserPayment.fromJson(e)).toList();
+            }
+          }
+
+          if (mounted) {
+            setState(() {
+              user = userObj;
+              payments = paymentList;
+              _isLoading = false;
+            });
+          }
+        } else {
+           _setError("User not found via API");
+        }
+      } else {
+        _setError("Server Error: ${userResponse.statusCode}");
+      }
+    } catch (e) {
+      _setError("Network Error: $e");
+    }
+  }
+
+  void _setError(String msg) {
+    if (mounted) {
+      setState(() {
+        _errorMessage = msg;
+        _isLoading = false;
+      });
+    }
+  }
+
+  // Handle status update
+  Future<void> _handleStatusUpdate(String status) async {
+    setState(() => _isLoading = true);
+    
+    try {
+      final response = await http.post(
+        Uri.parse('${Config.baseUrl}/update_user_status.php'),
+        body: {
+          'user_id': widget.userId,
+          'status': status,
+        },
+      );
+      
+      final data = json.decode(response.body);
+      
+      if (data['success'] == true) {
+        if (mounted) {
+           ScaffoldMessenger.of(context).showSnackBar(
+             SnackBar(content: Text("User marked as $status!")),
+           );
+           _fetchData(); // Refresh data to show new status/expiry
+        }
+      } else {
+        _setError(data['message'] ?? "Update failed");
+      }
+    } catch (e) {
+      _setError("Network error: $e");
+    } finally {
+      // _isLoading is handled by _fetchData inside success, but if error/loading needs reset:
+     if (mounted && user == null) setState(() => _isLoading = false); 
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFFDFDFB), // Warm white/cream
+      backgroundColor: const Color(0xFFFDFDFB),
       appBar: AppBar(
+        title: const Text("User Details", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
         backgroundColor: Colors.white,
         elevation: 0.5,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.black),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: const Text("User Details", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+        iconTheme: const IconThemeData(color: Colors.black),
       ),
-      body: SingleChildScrollView(
-        child: Column(
-          children: [
-            if (_showSuccess) _buildSuccessBanner(),
-            Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: LayoutBuilder(builder: (context, constraints) {
-                // Responsive layout: 1 column on mobile, 2 on tablet/web
-                bool isWide = constraints.maxWidth > 900;
-                return isWide
-                    ? Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Expanded(flex: 2, child: _buildMainContent()),
-                  const SizedBox(width: 20),
-                  Expanded(child: _buildSideActions()),
-                ])
-                    : Column(children: [
-                  _buildMainContent(),
-                  const SizedBox(height: 20),
-                  _buildSideActions(),
-                ]);
-              }),
-            ),
-          ],
-        ),
-      ),
+      body: _isLoading 
+        ? const Center(child: CircularProgressIndicator(color: Colors.amber))
+        : _errorMessage != null
+          ? Center(child: Text(_errorMessage!, style: const TextStyle(color: Colors.red)))
+          : user == null
+            ? const Center(child: Text("User data unavailable"))
+            : SingleChildScrollView(
+                child: Column(
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: LayoutBuilder(builder: (context, constraints) {
+                        bool isWide = constraints.maxWidth > 900;
+                        return isWide
+                            ? Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                          Expanded(flex: 2, child: _buildMainContent()),
+                          const SizedBox(width: 20),
+                          Expanded(child: _buildSideActions()),
+                        ])
+                            : Column(children: [
+                          _buildMainContent(),
+                          const SizedBox(height: 20),
+                          _buildSideActions(),
+                        ]);
+                      }),
+                    ),
+                  ],
+                ),
+              ),
     );
   }
 
   // --- UI Components ---
-
-  Widget _buildSuccessBanner() {
-    return Container(
-      color: Colors.green[50],
-      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 20),
-      child: const Row(
-        children: [
-          Icon(Icons.check_circle, color: Colors.green, size: 20),
-          SizedBox(width: 10),
-          Text("User status updated successfully!", style: TextStyle(color: Colors.green, fontWeight: FontWeight.w500)),
-        ],
-      ),
-    );
-  }
 
   Widget _buildMainContent() {
     return Column(
@@ -145,27 +218,29 @@ class _UserDetailScreenState extends State<UserDetailScreen> {
                       shape: BoxShape.circle,
                     ),
                     alignment: Alignment.center,
-                    child: Text(user.name[0], style: const TextStyle(fontSize: 32, color: Colors.white, fontWeight: FontWeight.bold)),
+                    child: Text(user!.name.isNotEmpty ? user!.name[0] : '?', style: const TextStyle(fontSize: 32, color: Colors.white, fontWeight: FontWeight.bold)),
                   ),
                   const SizedBox(width: 20),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(user.name, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-                      Text(user.email, style: TextStyle(color: Colors.grey[600])),
-                      const SizedBox(height: 8),
-                      _buildBadge(
-                        user.membershipStatus == 'paid' ? 'Active Member' : 'Inactive Member',
-                        user.membershipStatus == 'paid' ? Colors.green : Colors.red,
-                      ),
-                    ],
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(user!.name, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+                        Text(user!.email, style: TextStyle(color: Colors.grey[600])),
+                        const SizedBox(height: 8),
+                        _buildBadge(
+                          user!.membershipStatus == 'paid' ? 'Active Member' : 'Inactive Member',
+                          user!.membershipStatus == 'paid' ? Colors.green : Colors.red,
+                        ),
+                      ],
+                    ),
                   )
                 ],
               ),
               const Divider(height: 40),
-              _buildInfoRow(Icons.email_outlined, "Email", user.email),
-              _buildInfoRow(Icons.phone_outlined, "Phone Number", user.phone),
-              _buildInfoRow(Icons.calendar_today_outlined, "Member Since", DateFormat('MMMM dd, yyyy').format(user.memberSince)),
+              _buildInfoRow(Icons.email_outlined, "Email", user!.email),
+              _buildInfoRow(Icons.phone_outlined, "Phone Number", user!.phone),
+              _buildInfoRow(Icons.calendar_today_outlined, "Member Since", DateFormat('MMMM dd, yyyy').format(user!.memberSince)),
             ],
           ),
         ),
@@ -176,9 +251,9 @@ class _UserDetailScreenState extends State<UserDetailScreen> {
           title: "Membership Details",
           child: Column(
             children: [
-              _buildDetailRow("Member ID", user.id.toUpperCase()),
-              _buildDetailRow("Status", user.membershipStatus == 'paid' ? "Active" : "Inactive", isStatus: true),
-              _buildDetailRow("Expiry Date", DateFormat('MMMM dd, yyyy').format(user.membershipExpiry), isLast: true),
+              _buildDetailRow("Member ID", user!.id.toUpperCase()),
+              _buildDetailRow("Status", user!.membershipStatus == 'paid' ? "Active" : "Inactive", isStatus: true),
+              _buildDetailRow("Expiry Date", DateFormat('MMMM dd, yyyy').format(user!.membershipExpiry), isLast: true),
             ],
           ),
         ),
@@ -263,10 +338,10 @@ class _UserDetailScreenState extends State<UserDetailScreen> {
         children: [
           Icon(icon, color: Colors.amber[700], size: 20),
           const SizedBox(width: 12),
-          Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(label, style: TextStyle(color: Colors.grey[500], fontSize: 12)),
             Text(value, style: const TextStyle(fontWeight: FontWeight.w500)),
-          ])
+          ]))
         ],
       ),
     );

@@ -10,7 +10,7 @@ class ForgotPasswordScreen extends StatefulWidget {
 
 class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   // Page State
-  int _currentStep = 0; // 0: Email, 1: Verify, 2: Success
+  int _currentStep = 0;
   bool _isLoading = false;
   String? _errorMessage;
 

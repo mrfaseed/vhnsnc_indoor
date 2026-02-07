@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../login_screen.dart';
+import 'contact_support.dart';
+import 'about_app.dart';
 
 // SETTINGS SCREEN
 // - Refined Premium UI with rigid alignment and improved symmetry
@@ -16,7 +18,7 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   bool darkMode = false;
 
-  // Professional Palette
+
   static const Color goldAccent = Color(0xFFC5A028); // Deeper, more professional gold
   static const Color primaryText = Color(0xFF1A1C1E);
   static const Color secondaryText = Color(0xFF6C757D);
@@ -98,7 +100,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     iconColor: Color(0xFF0061FF),
                     title: 'Contact Support',
                     subtitle: '24/7 Premium Assistance',
-                    onTap: () {},
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => const ContactSupportScreen()),
+                      );
+                    },
                   ),
                   const Divider(height: 1, indent: 70, endIndent: 20, thickness: 0.8),
                   SettingsTile(
@@ -106,8 +113,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     iconBg: Color(0xFFF2F4F7),
                     iconColor: secondaryText,
                     title: 'About App',
-                    subtitle: 'Version 1.0.0 (Gold)',
-                    onTap: () {},
+                    subtitle: 'Version 2.0',
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => const AboutAppScreen()),
+                      );
+                    },
                   ),
                 ],
               ),

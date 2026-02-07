@@ -4,6 +4,15 @@ import 'payment_overview.dart';
 import 'create_announcement.dart';
 import 'user_details.dart';
 import '../create_account.dart';
+import 'manage_announcements.dart';
+import 'admin_create_user.dart';
+import 'admin_qr_scan.dart';
+import 'user_search_delegate.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import '../../config.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../login_screen.dart';
 
 class AdminDashboard extends StatefulWidget {
   const AdminDashboard({super.key});
@@ -20,9 +29,107 @@ class _AdminDashboardState extends State<AdminDashboard> {
   static const Color _textPrimary = Color(0xFF212121);
   static const Color _textSecondary = Color(0xFF616161);
 
+  List<Payment> _recentPayments = []; // Requires Payment model from payment_overview.dart
+
+  // Dashboard Stats
+  String _totalUsers = "0";
+  String _paidMembers = "0";
+  String _pendingUsers = "0";
+  String _revenue = "0";
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchRecentPayments();
+    _fetchDashboardStats();
+  }
+
+  Future<void> _fetchDashboardStats() async {
+    try {
+      final response = await http.get(Uri.parse('${Config.baseUrl}/get_dashboard_stats.php'));
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data['success'] == true && data['data'] != null) {
+          final stats = data['data'];
+          if (mounted) {
+            setState(() {
+              _totalUsers = stats['total_users'].toString();
+              _paidMembers = stats['paid_members'].toString();
+              _pendingUsers = stats['pending_users'].toString();
+              _revenue = stats['revenue'].toString();
+            });
+          }
+        }
+      } else {
+        debugPrint("Error fetching dashboard stats: Status Code ${response.statusCode}");
+      }
+    } catch (e) {
+      debugPrint("Error fetching dashboard stats: $e");
+    }
+  }
+
+  Future<void> _fetchRecentPayments() async {
+    try {
+      final response = await http.get(Uri.parse('${Config.baseUrl}/get_all_payments.php'));
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data['success'] == true) {
+          final List<dynamic> paymentsJson = data['data'];
+          // Take only top 5 for dashboard
+          setState(() {
+            _recentPayments = paymentsJson.take(5).map((json) => Payment.fromJson(json)).toList();
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint("Error fetching recent payments: $e");
+    }
+  }
+
+  Future<void> _handleLogout() async {
+    // Clear Session
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.clear();
+
+    if (!mounted) return;
+
+    // Navigate to Login
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(builder: (context) => const LoginScreen()),
+      (route) => false,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return PopScope(
+      canPop: false,
+      onPopInvoked: (bool didPop) async {
+        if (didPop) return;
+        final shouldPop = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text("Logout"),
+            content: const Text("Are you sure you want to logout?"),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text("Cancel"),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(context, true),
+                style: TextButton.styleFrom(foregroundColor: Colors.red),
+                child: const Text("Logout"),
+              ),
+            ],
+          ),
+        );
+        if (shouldPop ?? false) {
+          if (context.mounted) _handleLogout();
+        }
+      },
+      child: Scaffold(
       backgroundColor: _background,
       appBar: AppBar(
         backgroundColor: _primaryYellow,
@@ -34,7 +141,29 @@ class _AdminDashboardState extends State<AdminDashboard> {
         ),
         actions: [
           IconButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () {
+              showDialog(
+                context: context,
+                builder: (context) => AlertDialog(
+                  title: const Text("Logout"),
+                  content: const Text("Are you sure you want to logout?"),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text("Cancel"),
+                    ),
+                    TextButton(
+                      onPressed: () {
+                        Navigator.pop(context); // Close dialog
+                        _handleLogout();
+                      },
+                      style: TextButton.styleFrom(foregroundColor: Colors.red),
+                      child: const Text("Logout"),
+                    ),
+                  ],
+                ),
+              );
+            },
             icon: const Icon(Icons.logout, color: Colors.black87),
           ),
         ],
@@ -63,10 +192,10 @@ class _AdminDashboardState extends State<AdminDashboard> {
               mainAxisSpacing: 15,
               childAspectRatio: 1.2,
               children: [
-                _buildStatCard("Total Users", "150", Icons.people_outline),
-                _buildStatCard("Paid Members", "120", Icons.verified_user_outlined),
-                _buildStatCard("Pending", "30", Icons.hourglass_empty_rounded),
-                _buildStatCard("Revenue", "₹45,000", Icons.account_balance_wallet_outlined),
+                _buildStatCard("Total Users", _totalUsers, Icons.people_outline),
+                _buildStatCard("Paid Members", _paidMembers, Icons.verified_user_outlined),
+                _buildStatCard("Pending", _pendingUsers, Icons.hourglass_empty_rounded),
+                _buildStatCard("Revenue", "₹${double.tryParse(_revenue)?.toStringAsFixed(0) ?? '0'}", Icons.account_balance_wallet_outlined),
               ],
             ),
 
@@ -120,15 +249,23 @@ class _AdminDashboardState extends State<AdminDashboard> {
                   },
                 ),
                 _buildActionCard(
-                  Icons.analytics,
-                  "User details",
+                  Icons.edit_note,
+                  "Manage Announcements",
                   onTap: () {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                          // Passing '1' as a placeholder ID as per the screen requirement
-                          builder: (context) =>
-                              const UserDetailScreen(userId: '1')),
+                          builder: (context) => const ManageAnnouncements()),
+                    );
+                  },
+                ),
+                _buildActionCard(
+                  Icons.search,
+                  "Search User",
+                  onTap: () {
+                    showSearch(
+                      context: context,
+                      delegate: UserSearchDelegate(),
                     );
                   },
                 ),
@@ -139,7 +276,18 @@ class _AdminDashboardState extends State<AdminDashboard> {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                          builder: (context) => const RegisterScreen()),
+                          builder: (context) => const AdminCreateUser()),
+                    );
+                  },
+                ),
+                _buildActionCard(
+                  Icons.qr_code_scanner,
+                  "Scan QR",
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                          builder: (context) => const AdminQRScanScreen()),
                     );
                   },
                 ),
@@ -154,11 +302,15 @@ class _AdminDashboardState extends State<AdminDashboard> {
             const SizedBox(height: 12),
 
             // 3. Recent Payments List
-            ListView.builder(
+            _recentPayments.isEmpty 
+              ? const Center(child: Text("No recent payments", style: TextStyle(color: Colors.grey)))
+              : ListView.builder(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
-              itemCount: 3,
+              itemCount: _recentPayments.length,
               itemBuilder: (context, index) {
+                final payment = _recentPayments[index];
+                final isSuccess = payment.status == 'success';
                 return Container(
                   margin: const EdgeInsets.only(bottom: 12),
                   decoration: BoxDecoration(
@@ -167,16 +319,22 @@ class _AdminDashboardState extends State<AdminDashboard> {
                     border: Border.all(color: Colors.grey.shade100),
                   ),
                   child: ListTile(
-                    leading: const CircleAvatar(
-                      backgroundColor: _lightYellow,
-                      child: Icon(Icons.person, color: Colors.orange),
+                    leading: CircleAvatar(
+                      backgroundColor: isSuccess ? Colors.green[50] : Colors.orange[50],
+                      child: Icon(
+                        isSuccess ? Icons.check : Icons.access_time, 
+                        color: isSuccess ? Colors.green : Colors.orange
+                      ),
                     ),
-                    title: Text("Transaction #${1024 + index}",
+                    title: Text(payment.userName,
                         style: const TextStyle(fontWeight: FontWeight.w600)),
-                    subtitle: const Text("Jan 06, 2026 • 11:59 AM"),
-                    trailing: const Text(
-                      "₹500",
-                      style: TextStyle(fontWeight: FontWeight.bold, color: Colors.green),
+                    subtitle: Text("ID: ${payment.id} • ${payment.date.toString().split(' ')[0]}"),
+                    trailing: Text(
+                      "₹${payment.amount.toStringAsFixed(0)}",
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold, 
+                        color: isSuccess ? Colors.green : Colors.orange
+                      ),
                     ),
                   ),
                 );
@@ -184,6 +342,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
             ),
           ],
         ),
+      ),
       ),
     );
   }

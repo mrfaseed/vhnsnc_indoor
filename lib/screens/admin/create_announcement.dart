@@ -18,6 +18,9 @@ class _CreateAnnouncementState extends State<CreateAnnouncement> {
   bool _isSaving = false;
   bool _showSuccess = false;
 
+  DateTime? _startDate;
+  DateTime? _endDate;
+
   @override
   void dispose() {
     _titleController.dispose();
@@ -25,10 +28,47 @@ class _CreateAnnouncementState extends State<CreateAnnouncement> {
     super.dispose();
   }
 
+  Future<void> _selectDate(BuildContext context, bool isStart) async {
+    final DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: DateTime.now(),
+      firstDate: DateTime(2025),
+      lastDate: DateTime(2030),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: ColorScheme.light(
+              primary: Colors.amber[700]!,
+              onPrimary: Colors.white,
+              onSurface: Colors.black,
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+    if (picked != null) {
+      setState(() {
+        if (isStart) {
+          _startDate = picked;
+        } else {
+          _endDate = picked;
+        }
+      });
+    }
+  }
+
   Future<void> _handleSubmit() async {
     if (_titleController.text.isEmpty || _descController.text.isEmpty) return;
 
-    setState(() => _isSaving = true);
+    // Show Loading Dialog
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(
+        child: CircularProgressIndicator(color: Colors.amber),
+      ),
+    );
 
     try {
       final url = Uri.parse('${Config.baseUrl}/create_announcement.php');
@@ -38,30 +78,48 @@ class _CreateAnnouncementState extends State<CreateAnnouncement> {
         body: jsonEncode({
           "title": _titleController.text,
           "description": _descController.text,
+          "start_date": _startDate != null ? DateFormat('yyyy-MM-dd').format(_startDate!) : null,
+          "end_date": _endDate != null ? DateFormat('yyyy-MM-dd').format(_endDate!) : null,
         }),
       );
 
       final data = jsonDecode(response.body);
 
-      setState(() => _isSaving = false);
+      // Close Loading Dialog
+      if (mounted) Navigator.pop(context);
 
       if (data['success'] == true) {
-         setState(() => _showSuccess = true);
-
-        // Auto-navigate after 2 seconds
-        Future.delayed(const Duration(seconds: 2), () {
-          if (mounted) Navigator.pop(context);
-        });
+        if (mounted) {
+           ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text("Announcement created successfully!"),
+              backgroundColor: Colors.green,
+            ),
+          );
+          Navigator.pop(context); // Go back
+        }
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Error: ${data['message']}")),
-        );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text("Error: ${data['message']}"),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
       }
     } catch (e) {
-      setState(() => _isSaving = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Connection failed: $e")),
-      );
+      // Close Loading Dialog if open
+      if (mounted) Navigator.pop(context);
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("Connection failed: $e"),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 
@@ -106,7 +164,7 @@ class _CreateAnnouncementState extends State<CreateAnnouncement> {
               padding: const EdgeInsets.all(24.0),
               child: Column(
                 children: [
-                  // --- Main Form Card ---
+                   // --- Main Form Card ---
                   Container(
                     padding: const EdgeInsets.all(32),
                     decoration: BoxDecoration(
@@ -160,6 +218,88 @@ class _CreateAnnouncementState extends State<CreateAnnouncement> {
                           controller: _titleController,
                           onChanged: (_) => setState(() {}),
                           decoration: _inputDecoration('e.g. Holiday Maintenance'),
+                        ),
+                        const SizedBox(height: 24),
+
+                        // Date Selection
+                        Column(
+                          children: [
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Expanded(child: _buildLabel('Start Date (Optional)')),
+                                const SizedBox(width: 16),
+                                Expanded(child: _buildLabel('End Date       (Optional)')),
+                              ],
+                            ),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: GestureDetector(
+                                    onTap: () => _selectDate(context, true),
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 14),
+                                      decoration: BoxDecoration(
+                                        borderRadius: BorderRadius.circular(12),
+                                        border: Border.all(color: Colors.grey[300]!),
+                                        color: Colors.white,
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          Icon(Icons.calendar_today, size: 18, color: Colors.grey[600]),
+                                          const SizedBox(width: 8),
+                                          Expanded(
+                                            child: Text(
+                                              _startDate == null 
+                                                ? "Select Date" 
+                                                : DateFormat('MMM dd, yyyy').format(_startDate!),
+                                              overflow: TextOverflow.ellipsis,
+                                              style: TextStyle(
+                                                color: _startDate == null ? Colors.grey[400] : Colors.black87,
+                                                fontSize: 13,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 16),
+                                Expanded(
+                                  child: GestureDetector(
+                                    onTap: () => _selectDate(context, false),
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 14),
+                                      decoration: BoxDecoration(
+                                        borderRadius: BorderRadius.circular(12),
+                                        border: Border.all(color: Colors.grey[300]!),
+                                        color: Colors.white,
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          Icon(Icons.event_busy, size: 18, color: Colors.grey[600]),
+                                          const SizedBox(width: 8),
+                                          Expanded(
+                                            child: Text(
+                                              _endDate == null 
+                                                ? "Select Date" 
+                                                : DateFormat('MMM dd, yyyy').format(_endDate!),
+                                              overflow: TextOverflow.ellipsis,
+                                              style: TextStyle(
+                                                color: _endDate == null ? Colors.grey[400] : Colors.black87,
+                                                fontSize: 13,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
                         ),
                         const SizedBox(height: 24),
 

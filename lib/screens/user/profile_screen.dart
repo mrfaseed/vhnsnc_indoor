@@ -1,4 +1,13 @@
+
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:intl/intl.dart';
+import 'package:vhnsnc_indoor/config.dart' as app_config;
+import '../../config.dart';
+import '../create_account.dart'; // For LoginScreen redirect
+import 'profile_edit_screen.dart';
 
 // Simple data model to mimic your "useAuth" user object
 class UserProfile {
@@ -21,22 +30,66 @@ class UserProfile {
   });
 }
 
-class ProfileScreen extends StatelessWidget {
+class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    // Mock user data (In a real app, you'd get this from your Auth Provider)
-    final user = UserProfile(
-      id: "usr-9921",
-      name: "Mohammad Faseed",
-      email: "faseedmohamed6@gmail.com",
-      phone: "+91 98765 43210",
-      memberSince: DateTime(2023, 5, 15),
-      membershipExpiry: DateTime(2026, 5, 15),
-      membershipStatus: 'paid',
-    );
+  State<ProfileScreen> createState() => _ProfileScreenState();
+}
 
+class _ProfileScreenState extends State<ProfileScreen> {
+  UserProfile? _user;
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchUserData();
+  }
+
+  Future<void> _fetchUserData() async {
+    final prefs = await SharedPreferences.getInstance();
+    final userId = prefs.getString('user_id');
+
+    if (userId == null) {
+      if (mounted) setState(() => _isLoading = false);
+      return;
+    }
+
+    try {
+      final response = await http.get(Uri.parse('${app_config.Config.baseUrl}/get_user_details.php?user_id=$userId'));
+      
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data['success'] == true) {
+          final userData = data['data'];
+
+          // Safe Date Parsing
+          DateTime memberSince = DateTime.tryParse(userData['created_at'] ?? '') ?? DateTime.now();
+          DateTime membershipExpiry = DateTime.tryParse(userData['membership_expiry'] ?? '') ?? DateTime.now();
+
+          setState(() {
+            _user = UserProfile(
+              id: userData['id'].toString(),
+              name: userData['name'] ?? 'Unknown',
+              email: userData['email'] ?? '',
+              phone: userData['phone'] ?? '',
+              memberSince: memberSince,
+              membershipExpiry: membershipExpiry,
+              membershipStatus: userData['membership_status'] ?? 'unpaid',
+            );
+            _isLoading = false;
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint("Error fetching profile: $e");
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Scaffold(
       // The background gradient
       body: Container(
@@ -50,7 +103,11 @@ class ProfileScreen extends StatelessWidget {
           ),
         ),
         child: SafeArea(
-          child: SingleChildScrollView(
+          child: _isLoading 
+            ? const Center(child: CircularProgressIndicator(color: Colors.amber))
+            : _user == null 
+              ? const Center(child: Text("Could not load profile"))
+              : SingleChildScrollView(
             child: Column(
               children: [
                 // Custom Header (AppBar replacement)
@@ -61,15 +118,15 @@ class ProfileScreen extends StatelessWidget {
                   child: Column(
                     children: [
                       // Profile Header Card
-                      _buildProfileHeaderCard(user),
+                      _buildProfileHeaderCard(_user!),
                       const SizedBox(height: 24),
 
                       // Personal Information Card
-                      _buildPersonalInfoCard(user),
+                      _buildPersonalInfoCard(_user!),
                       const SizedBox(height: 24),
 
                       // Membership Details Card
-                      _buildMembershipCard(user),
+                      _buildMembershipCard(_user!),
                     ],
                   ),
                 ),
@@ -188,6 +245,12 @@ class ProfileScreen extends StatelessWidget {
     );
   }
 
+  // Helper for date formatting
+  String _formatDate(DateTime date) {
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return "${date.day} ${months[date.month - 1]}, ${date.year}";
+  }
+
   // 3. Personal Info List
   Widget _buildPersonalInfoCard(UserProfile user) {
     return Container(
@@ -215,7 +278,22 @@ class ProfileScreen extends StatelessWidget {
                       fontWeight: FontWeight.bold,
                       color: Colors.black87)),
               TextButton.icon(
-                onPressed: () {},
+                onPressed: () async {
+                  final result = await Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => ProfileEditScreen(
+                        userId: user.id,
+                        currentPhone: user.phone,
+                        userEmail: user.email,
+                      ),
+                    ),
+                  );
+
+                  if (result == true) {
+                    _fetchUserData();
+                  }
+                },
                 icon: const Icon(Icons.edit, size: 16, color: Colors.orange),
                 label: const Text("Edit", style: TextStyle(color: Colors.orange)),
               )
@@ -224,8 +302,7 @@ class ProfileScreen extends StatelessWidget {
           const SizedBox(height: 16),
           _infoRow(Icons.email_outlined, "Email", user.email),
           _infoRow(Icons.phone_outlined, "Phone Number", user.phone),
-          _infoRow(Icons.calendar_today_outlined, "Member Since",
-              "${user.memberSince.day} May, ${user.memberSince.year}"),
+          _infoRow(Icons.calendar_today_outlined, "Member Since", _formatDate(user.memberSince)),
         ],
       ),
     );
@@ -281,7 +358,7 @@ class ProfileScreen extends StatelessWidget {
           const Divider(color: Color(0xFFFFF9C4)),
           _dataRow("Status", isPaid ? "Active" : "Inactive", isStatus: true, isPaid: isPaid),
           const Divider(color: Color(0xFFFFF9C4)),
-          _dataRow("Expiry Date", "15 May, 2026"),
+          _dataRow("Expiry Date", _formatDate(user.membershipExpiry)),
         ],
       ),
     );

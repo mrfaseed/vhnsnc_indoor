@@ -1,4 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../../config.dart' as app_config;
 
 class PaymentHistoryScreen extends StatefulWidget {
   const PaymentHistoryScreen({super.key});
@@ -8,34 +12,69 @@ class PaymentHistoryScreen extends StatefulWidget {
 }
 
 class _PaymentHistoryScreenState extends State<PaymentHistoryScreen> {
-  List<Map<String, dynamic>> payments = [
-    {
-      "title": "Monthly Membership",
-      "date": "12 Dec 2025",
-      "amount": "₹300",
-      "success": true,
-    },
-    {
-      "title": "Monthly Membership",
-      "date": "12 Nov 2025",
-      "amount": "₹300",
-      "success": true,
-    },
-    {
-      "title": "Membership Renewal",
-      "date": "12 Oct 2025",
-      "amount": "₹300",
-      "success": false,
-    },
-  ];
+  List<Map<String, dynamic>> payments = [];
+  bool _isLoading = true;
 
-  /// 🔄 Pull to refresh logic
+  @override
+  void initState() {
+    super.initState();
+    _refreshPayments();
+  }
+
   Future<void> _refreshPayments() async {
-    await Future.delayed(const Duration(seconds: 1));
+    final prefs = await SharedPreferences.getInstance();
+    final userId = prefs.getString('user_id');
 
-    setState(() {
-      payments = List.from(payments.reversed);
-    });
+    if (userId == null) {
+      if (mounted) setState(() {
+         payments = [];
+         _isLoading = false;
+      });
+      return;
+    }
+
+    try {
+      final response = await http.get(Uri.parse('${app_config.Config.baseUrl}/get_payment_history.php?user_id=$userId'));
+      
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data['success'] == true) {
+          final List<dynamic> rawList = data['data'];
+          
+          if(mounted) {
+            setState(() {
+              payments = rawList.map((item) {
+                 // Format Date safely
+                 String dateStr = item['payment_date'] ?? '';
+                 String displayDate = dateStr;
+                 try{
+                   DateTime dt = DateTime.parse(dateStr);
+                   displayDate = "${dt.day} ${_monthName(dt.month)} ${dt.year}";
+                 } catch(e) {}
+
+                 return {
+                  "title": item['description'] ?? 'Payment',
+                  "date": displayDate,
+                  "amount": "₹${item['amount']}",
+                  "success": (item['payment_status'] == 'success'), 
+                 };
+              }).toList();
+              _isLoading = false;
+            });
+          }
+        } else {
+             if(mounted) setState(() => _isLoading = false);
+        }
+      }
+    } catch (e) {
+      debugPrint("Error fetching payments: $e");
+       if(mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  String _monthName(int month) {
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return months[month - 1];
   }
 
   @override
@@ -48,9 +87,13 @@ class _PaymentHistoryScreenState extends State<PaymentHistoryScreen> {
         foregroundColor: Colors.black,
         elevation: 0,
       ),
-      body: RefreshIndicator(
+      body: _isLoading 
+         ? const Center(child: CircularProgressIndicator(color: Colors.blue))
+         : RefreshIndicator(
         onRefresh: _refreshPayments,
-        child: ListView.builder(
+        child: payments.isEmpty 
+           ? const Center(child: Text("No payment history found.")) 
+           : ListView.builder(
           padding: const EdgeInsets.all(16),
           itemCount: payments.length,
           itemBuilder: (context, index) {
@@ -60,11 +103,7 @@ class _PaymentHistoryScreenState extends State<PaymentHistoryScreen> {
               date: item["date"],
               amount: item["amount"],
               isSuccess: item["success"],
-              onTap: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text("Payment tapped")),
-                );
-              },
+              onTap: () {},
             );
           },
         ),

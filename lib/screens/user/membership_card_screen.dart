@@ -1,4 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:qr_flutter/qr_flutter.dart';
+import '../../config.dart' as app_config;
 
 // User model to mimic your AuthContext
 class UserProfile {
@@ -21,22 +26,66 @@ class UserProfile {
   });
 }
 
-class MembershipCardScreen extends StatelessWidget {
+class MembershipCardScreen extends StatefulWidget {
   const MembershipCardScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    // Mock user data
-    final user = UserProfile(
-      id: "MEMBER-7890",
-      name: "Mohammad Faseed",
-      email: "faseedmohamed6@gmail.com",
-      phone: "+91 98765 43210",
-      memberSince: DateTime(2023, 1, 1),
-      membershipExpiry: DateTime(2026, 12, 31),
-      membershipStatus: 'paid',
-    );
+  State<MembershipCardScreen> createState() => _MembershipCardScreenState();
+}
 
+class _MembershipCardScreenState extends State<MembershipCardScreen> {
+  UserProfile? _user;
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchUserData();
+  }
+
+  Future<void> _fetchUserData() async {
+    final prefs = await SharedPreferences.getInstance();
+    final userId = prefs.getString('user_id');
+
+    if (userId == null) {
+      if (mounted) setState(() => _isLoading = false);
+      return;
+    }
+
+    try {
+      final response = await http.get(Uri.parse('${app_config.Config.baseUrl}/get_user_details.php?user_id=$userId'));
+      
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data['success'] == true) {
+          final userData = data['data'];
+
+          // Safe Date Parsing
+          DateTime memberSince = DateTime.tryParse(userData['created_at'] ?? '') ?? DateTime.now();
+          DateTime membershipExpiry = DateTime.tryParse(userData['membership_expiry'] ?? '') ?? DateTime.now();
+
+          setState(() {
+            _user = UserProfile(
+              id: userData['id'].toString(),
+              name: userData['name'] ?? 'Unknown',
+              email: userData['email'] ?? '',
+              phone: userData['phone'] ?? '',
+              memberSince: memberSince,
+              membershipExpiry: membershipExpiry,
+              membershipStatus: userData['membership_status'] ?? 'unpaid',
+            );
+            _isLoading = false;
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint("Error fetching membership card: $e");
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Scaffold(
       body: Container(
         width: double.infinity,
@@ -48,7 +97,11 @@ class MembershipCardScreen extends StatelessWidget {
           ),
         ),
         child: SafeArea(
-          child: SingleChildScrollView(
+          child: _isLoading 
+            ? const Center(child: CircularProgressIndicator(color: Colors.amber))
+            : _user == null 
+              ? const Center(child: Text("Could not load details"))
+              : SingleChildScrollView(
             child: Column(
               children: [
                 _buildAppBar(context),
@@ -56,11 +109,11 @@ class MembershipCardScreen extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
                   child: Column(
                     children: [
-                      _buildMembershipCard(user),
+                      _buildMembershipCard(_user!),
                       const SizedBox(height: 24),
-                      _buildQRCodeSection(user),
+                      _buildQRCodeSection(_user!),
                       const SizedBox(height: 24),
-                      _buildMemberDetails(user),
+                      _buildMemberDetails(_user!),
                     ],
                   ),
                 ),
@@ -209,7 +262,7 @@ class MembershipCardScreen extends StatelessWidget {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     _cardSmallDetail("Member ID", user.id.toUpperCase()),
-                    _cardSmallDetail("Expiry Date", "Dec 31, 2026"),
+                    _cardSmallDetail("Expiry Date", _formatDate(user.membershipExpiry)),
                   ],
                 )
               ],
@@ -251,13 +304,25 @@ class MembershipCardScreen extends StatelessWidget {
               borderRadius: BorderRadius.circular(16),
               border: Border.all(color: Colors.yellow.shade100),
             ),
-            child: const Icon(Icons.qr_code_2, size: 120, color: Colors.amber),
+            child: QrImageView(
+              data: user.id,
+              version: QrVersions.auto,
+              size: 200.0,
+              gapless: false,
+              foregroundColor: Colors.black,
+            ),
           ),
           const SizedBox(height: 16),
           Text("QR Code: ${user.id.toUpperCase()}", style: const TextStyle(color: Colors.grey, fontSize: 12)),
         ],
       ),
     );
+  }
+
+  // Helper for date formatting
+  String _formatDate(DateTime date) {
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return "${months[date.month - 1]} ${date.day}, ${date.year}";
   }
 
   // 4. Details List
@@ -277,7 +342,7 @@ class MembershipCardScreen extends StatelessWidget {
           _detailRow("Full Name", user.name),
           _detailRow("Email", user.email),
           _detailRow("Phone", user.phone),
-          _detailRow("Member Since", "January 1, 2023", isLast: true),
+          _detailRow("Member Since", _formatDate(user.memberSince), isLast: true),
         ],
       ),
     );

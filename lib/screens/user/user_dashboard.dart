@@ -3,6 +3,11 @@ import 'package:vhnsnc_indoor/screens/user/payment_history_screen.dart';
 
 // Ensure these paths match your project structure exactly
 import './../settings/settings.dart';
+import '../../screens/login_screen.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../../config.dart' as app_config;
 import './membership_card_screen.dart';
 import './make_payment_screen.dart';
 import './announcements_screen.dart';
@@ -13,88 +18,237 @@ import './profile_screen.dart';
 // - UI CURRENTLY USES LIGHT THEME ONLY (as requested)
 // - Theme toggle is FUTURE FEATURE (not implemented)
 
-class UserDashboard extends StatelessWidget {
+class UserDashboard extends StatefulWidget {
   const UserDashboard({super.key});
 
-  // MOCK USER DATA (Replace with real auth/provider later)
-  final Map<String, dynamic> user = const {
-    'name': 'Mohammad Faseed',
-    'membershipStatus': 'paid',
-    'membershipExpiry': '2025-01-15'
-  };
+  @override
+  State<UserDashboard> createState() => _UserDashboardState();
+}
+
+class _UserDashboardState extends State<UserDashboard> {
+  // State Variables
+  bool _isLoading = true;
+  String _userName = 'User';
+  String _membershipStatus = 'unpaid';
+  String _membershipExpiry = '';
+  int _daysRemaining = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserData();
+  }
+
+  Future<void> _loadUserData() async {
+    final prefs = await SharedPreferences.getInstance();
+    final userId = prefs.getString('user_id');
+    final storedName = prefs.getString('user_name');
+
+    if (storedName != null) {
+      setState(() => _userName = storedName);
+    }
+
+    if (userId != null) {
+      await _fetchUserDetails(userId);
+    } else {
+       // Handle case where user_id is missing (logout?)
+       if(mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _fetchUserDetails(String userId) async {
+    try {
+      final response = await http.get(Uri.parse('${app_config.Config.baseUrl}/get_user_details.php?user_id=$userId'));
+      
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data['success'] == true) {
+          final userData = data['data'];
+          if (mounted) {
+            setState(() {
+              _userName = userData['name'];
+              _membershipStatus = userData['membership_status'];
+              _membershipExpiry = userData['membership_expiry'] ?? '';
+              _daysRemaining = userData['days_remaining'] ?? 0;
+              _isLoading = false;
+            });
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint("Error fetching user details: $e");
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _handleLogout() async {
+    // Clear Session
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.clear();
+
+    if (!mounted) return;
+
+    // Navigate to Login
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(builder: (context) => const LoginScreen()),
+      (route) => false,
+    );
+  }
 
   // Helper function to navigate to a new screen
   void _navigateToScreen(BuildContext context, Widget screen) {
     Navigator.push(
       context,
       MaterialPageRoute(builder: (context) => screen),
-    );
+    ).then((_) => _loadUserData()); // Refresh data when returning from other screens
   }
 
   @override
   Widget build(BuildContext context) {
-    // --- DATA PREPARATION (Calculated once per build for performance) ---
+    // Logic: Check status
+    final bool isPaid = _membershipStatus.toLowerCase() == 'paid';
+    final bool isExpired = _membershipStatus.toLowerCase() == 'expired';
 
-    // 1. Logic Fix: Check for 'paid' status
-    final String rawStatus = user['membershipStatus'] ?? 'unpaid';
-    final bool isPaid = rawStatus.toLowerCase() == 'paid';
+    // Safe Date Parsing
+    DateTime? expiryDate;
+    String formattedExpiry = "N/A";
+    if (_membershipExpiry.isNotEmpty) {
+       expiryDate = DateTime.tryParse(_membershipExpiry);
+       if(expiryDate != null) {
+         formattedExpiry = "${expiryDate.year}-${expiryDate.month.toString().padLeft(2, '0')}-${expiryDate.day.toString().padLeft(2, '0')}";
+       }
+    }
 
-    // 2. Safe Date Parsing: Prevents "Signal 3" hangs on bad date strings
-    final DateTime expiryDate = DateTime.tryParse(user['membershipExpiry'] ?? '') ?? DateTime.now();
-    final String formattedExpiry = "${expiryDate.year}-${expiryDate.month.toString().padLeft(2, '0')}-${expiryDate.day.toString().padLeft(2, '0')}";
+    // Expiring Soon Logic
+    final bool expiringSoon = isPaid && _daysRemaining <= 30 && _daysRemaining >= 0;
 
-    // 3. Logic: Check if expiring within 30 days
-    final int daysUntilExpiry = expiryDate.difference(DateTime.now()).inDays;
-    final bool expiringSoon = isPaid && daysUntilExpiry <= 30 && daysUntilExpiry >= 0;
-
-    return Scaffold(
-      backgroundColor: LightTheme.background,
-      body: SingleChildScrollView(
-        physics: const BouncingScrollPhysics(),
-        child: Column(
-          children: [
-            // --- HEADER SECTION ---
-            Container(
-              padding: const EdgeInsets.fromLTRB(20, 60, 20, 40),
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    Color(0xFFFFC107), // warm golden yellow
-                    Color(0xFFFFA000), // deeper amber
-                  ],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                borderRadius: BorderRadius.only(
-                  bottomLeft: Radius.circular(32),
-                  bottomRight: Radius.circular(32),
-                ),
+    return PopScope(
+      canPop: false,
+      onPopInvoked: (bool didPop) async {
+        // ... (existing pop logic kept as is, just ensuring context) ...
+        if (didPop) return;
+        final shouldPop = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text("Logout"),
+            content: const Text("Are you sure you want to logout?"),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text("Cancel"),
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('Welcome back,', style: LightTheme.subTextWhite),
-                          const SizedBox(height: 4),
-                          Text(user['name'], style: LightTheme.headingWhite),
-                        ],
-                      ),
-                      IconButton(
-                        onPressed: () => _navigateToScreen(context, const SettingsScreen()),
-                        icon: const Icon(Icons.settings_outlined),
-                        color: Colors.white,
-                        style: IconButton.styleFrom(
-                          backgroundColor: Colors.white24,
-                        ),
-                      )
+              TextButton(
+                onPressed: () => Navigator.pop(context, true),
+                style: TextButton.styleFrom(foregroundColor: Colors.red),
+                child: const Text("Logout"),
+              ),
+            ],
+          ),
+        );
+        if (shouldPop ?? false) {
+           if (context.mounted) _handleLogout();
+        }
+      },
+      child: Scaffold(
+      backgroundColor: LightTheme.background,
+      body: Theme(
+        data: Theme.of(context).copyWith(
+          textTheme: Theme.of(context).textTheme.apply(fontFamily: 'Poppins'),
+        ),
+        child: _isLoading 
+          ? const Center(child: CircularProgressIndicator(color: Colors.amber))
+          : SingleChildScrollView(
+          physics: const BouncingScrollPhysics(),
+          child: Column(
+            children: [
+              // --- HEADER SECTION ---
+              Container(
+                padding: const EdgeInsets.fromLTRB(20, 60, 20, 40),
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      Color(0xFFFFC107), // warm golden yellow
+                      Color(0xFFFFA000), // deeper amber
                     ],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
                   ),
-
+                  borderRadius: BorderRadius.only(
+                    bottomLeft: Radius.circular(32),
+                    bottomRight: Radius.circular(32),
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      crossAxisAlignment: CrossAxisAlignment.start, // Align to top
+                      children: [
+                        Expanded( // Fix: Wrapped in Expanded to prevent overflow
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('Welcome Back,', style: LightTheme.subTextWhite),
+                              const SizedBox(height: 4),
+                              Text(
+                                _userName, 
+                                style: LightTheme.headingWhite,
+                                overflow: TextOverflow.ellipsis, // Add ellipsis
+                                maxLines: 1, 
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 8), // Spacing between text and buttons
+                        Row(
+                          mainAxisSize: MainAxisSize.min, // Essential for Row inside Row
+                          children: [
+                            IconButton(
+                              onPressed: () => _navigateToScreen(context, const SettingsScreen()),
+                              icon: const Icon(Icons.settings_outlined),
+                              color: Colors.white,
+                              style: IconButton.styleFrom(
+                                backgroundColor: Colors.white24,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            IconButton(
+                              onPressed: () {
+                                showDialog(
+                                  context: context,
+                                  builder: (context) => AlertDialog(
+                                    title: const Text("Logout"),
+                                    content: const Text("Are you sure you want to logout?"),
+                                    actions: [
+                                      TextButton(
+                                        onPressed: () => Navigator.pop(context),
+                                        child: const Text("Cancel"),
+                                      ),
+                                      TextButton(
+                                        onPressed: () {
+                                          Navigator.pop(context); // Close dialog
+                                          _handleLogout();
+                                        },
+                                        style: TextButton.styleFrom(foregroundColor: Colors.red),
+                                        child: const Text("Logout"),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              },
+                              icon: const Icon(Icons.logout),
+                              color: Colors.white,
+                              style: IconButton.styleFrom(
+                                backgroundColor: Colors.white24,
+                              ),
+                            ),
+                          ],
+                        )
+                      ],
+                    ),
                   const SizedBox(height: 24),
 
                   // --- MEMBERSHIP STATUS CARD ---
@@ -125,13 +279,13 @@ class UserDashboard extends StatelessWidget {
                                 Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                                   decoration: BoxDecoration(
-                                    color: isPaid ? Colors.green[100] : Colors.red[100],
+                                    color: isPaid ? Colors.green[100] : (isExpired ? Colors.orange[100] : Colors.red[100]),
                                     borderRadius: BorderRadius.circular(12),
                                   ),
                                   child: Text(
-                                    isPaid ? 'Active' : 'Inactive',
+                                    isPaid ? 'Active' : (isExpired ? 'Expired' : 'Inactive'),
                                     style: TextStyle(
-                                      color: isPaid ? Colors.green[700] : Colors.red[700],
+                                      color: isPaid ? Colors.green[700] : (isExpired ? Colors.orange[800] : Colors.red[700]),
                                       fontWeight: FontWeight.bold,
                                       fontSize: 12,
                                     ),
@@ -148,12 +302,10 @@ class UserDashboard extends StatelessWidget {
                             ),
                           ],
                         ),
-
                         const Padding(
                           padding: EdgeInsets.symmetric(vertical: 16),
                           child: Divider(height: 1),
                         ),
-
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
@@ -189,7 +341,6 @@ class UserDashboard extends StatelessWidget {
                 ],
               ),
             ),
-
             const SizedBox(height: 24),
 
             // --- QUICK ACTIONS GRID ---
@@ -210,9 +361,15 @@ class UserDashboard extends StatelessWidget {
                   ),
                   _ActionCard(
                     icon: Icons.payments_outlined,
-                    label: 'Make Payment',
+                    label: isPaid ? 'Already Paid' : 'Make Payment',
                     color: Colors.green,
-                    onTap: () => _navigateToScreen(context, const MakePaymentScreen()),
+                    onTap: () {
+                         if (isPaid) {
+                           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("You are already an active member!")));
+                         } else {
+                           _navigateToScreen(context, const MakePaymentScreen());
+                         }
+                    },
                   ),
                   _ActionCard(
                     icon: Icons.campaign_outlined,
@@ -229,7 +386,6 @@ class UserDashboard extends StatelessWidget {
                 ],
               ),
             ),
-
             const SizedBox(height: 20),
 
             // --- PAYMENT HISTORY TILE ---
@@ -237,11 +393,11 @@ class UserDashboard extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 20),
               child: Container(
                 decoration: BoxDecoration(
-                  color: Colors.white, // Pure white background
+                  color: Colors.white,
                   borderRadius: BorderRadius.circular(16),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.05), // Light, clean shadow
+                      color: Colors.black.withOpacity(0.05),
                       blurRadius: 10,
                       offset: const Offset(0, 4),
                     )
@@ -284,6 +440,8 @@ class UserDashboard extends StatelessWidget {
             const SizedBox(height: 40),
           ],
         ),
+      ),
+      ),
       ),
     );
   }
@@ -350,29 +508,34 @@ class LightTheme {
   static const background = Color(0xFFF9FAFB);
 
   static const headingWhite = TextStyle(
-    fontSize: 24,
+    fontSize: 20, // Reduced from 24
     fontWeight: FontWeight.bold,
     color: Colors.white,
-    letterSpacing: 0.5,
+    letterSpacing: -0.5, // Reduced from 0.5
+    fontFamily: 'Poppins',
   );
 
   static const subTextWhite = TextStyle(
     color: Colors.white70,
     fontSize: 14,
+    fontFamily: 'Poppins',
   );
 
   static const bodyText = TextStyle(
     fontSize: 16,
     fontWeight: FontWeight.w700,
     color: Color(0xFF111827),
+    fontFamily: 'Poppins',
   );
 
   static const subText = TextStyle(
     fontSize: 13,
     color: Color(0xFF6B7280),
+    fontFamily: 'Poppins',
   );
 }
 
 class DarkTheme {
   static const background = Color(0xFF0F172A);
 }
+
